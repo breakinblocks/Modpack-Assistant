@@ -1,0 +1,31 @@
+{
+  "values": [
+    "minecraft:minecart",
+    "minecraft:chest_minecart",
+    "minecraft:furnace_minecart",
+    "minecraft:hopper_minecart",
+    "minecraft:tnt_minecart",
+    "minecraft:command_block_minecart",
+    "minecraft:spawner_minecart",
+    {
+      "id": "aeronautics:propeller_bearing_contraption",
+      "required": false
+    },
+    {
+      "id": "create:contraption",
+      "required": false
+    },
+    {
+      "id": "create:stationary_contraption",
+      "required": false
+    },
+    {
+      "id": "create:gantry_contraption",
+      "required": false
+    },
+    {
+      "id": "create:carriage_contraption",
+      "required": false
+    }
+  ]
+}

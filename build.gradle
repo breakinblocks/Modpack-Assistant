@@ -1,0 +1,174 @@
+plugins {
+    id 'java-library'
+    id 'idea'
+    id 'maven-publish'
+    id 'net.neoforged.moddev' version '2.0.140'
+}
+
+tasks.named('wrapper', Wrapper).configure {
+    distributionType = Wrapper.DistributionType.BIN
+}
+
+version = "${minecraft_version}-${mod_version}"
+group = mod_group
+
+base {
+    archivesName = mod_id
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+neoForge {
+    version = neo_version
+
+    parchment {
+        mappingsVersion = parchment_mappings_version
+        minecraftVersion = parchment_minecraft_version
+    }
+
+    runs {
+        configureEach {
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            logLevel = org.slf4j.event.Level.DEBUG
+        }
+
+        client {
+            client()
+            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+        }
+
+        server {
+            server()
+            programArgument '--nogui'
+            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+        }
+
+        gameTestServer {
+            type = "gameTestServer"
+            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+            gameDirectory = project.file('run-gametest')
+        }
+
+        data {
+            data()
+            programArguments.addAll '--mod', mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+sourceSets.main.resources { srcDir 'src/generated/resources' }
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    jarJar(implementation("org.apache.commons:commons-csv:${commons_csv_version}")) {
+        version {
+            strictly "[${commons_csv_version},)"
+            prefer commons_csv_version
+        }
+        exclude group: 'commons-io'
+        exclude group: 'commons-codec'
+    }
+    additionalRuntimeClasspath("org.apache.commons:commons-csv:${commons_csv_version}") {
+        exclude group: 'commons-io'
+        exclude group: 'commons-codec'
+    }
+}
+
+tasks.register("sourcesJar", Jar) {
+    archiveClassifier.set("sources")
+    from sourceSets.main.allJava
+}
+
+tasks.named("jar") {
+    dependsOn("sourcesJar")
+    manifest {
+        attributes([
+                'Implementation-Title'  : mod_name,
+                'Implementation-Version': version,
+                'Implementation-Vendor' : mod_authors,
+        ])
+    }
+}
+
+tasks.withType(ProcessResources).configureEach {
+    var replaceProperties = [
+            version              : version,
+            mod_id               : mod_id,
+            mod_name             : mod_name,
+            mod_authors          : mod_authors,
+            mod_description      : mod_description,
+            mod_license          : mod_license,
+            pack_format          : pack_format,
+            loader_version_range : loader_version_range,
+            neo_version_range    : neo_version_range,
+            minecraft_version_range: minecraft_version_range
+    ]
+
+    inputs.properties replaceProperties
+
+    filesMatching(['META-INF/neoforge.mods.toml']) {
+        expand replaceProperties
+    }
+
+    from(project.rootDir) {
+        include 'LICENSE.md'
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.register('copyGameTestStructures', Copy) {
+    from "src/main/resources/data/${mod_id}/gametest/structures"
+    into "run-gametest/gameteststructures"
+    include '*.snbt'
+}
+
+tasks.register('cleanGameTestWorld', Delete) {
+    delete "run-gametest/world"
+}
+
+tasks.named('runGameTestServer').configure {
+    dependsOn 'cleanGameTestWorld'
+    dependsOn 'copyGameTestStructures'
+}
+
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            artifactId = mod_id
+            from components.java
+            artifact sourcesJar
+        }
+    }
+    repositories {
+        maven {
+            name = "BreakInBlocks"
+            url = version.toString().endsWith("-SNAPSHOT") ?
+                    "https://maven.breakinblocks.com/snapshots" :
+                    "https://maven.breakinblocks.com/releases"
+            credentials {
+                username = System.getenv("MAVEN_USER") ?: ""
+                password = System.getenv("MAVEN_TOKEN") ?: ""
+            }
+        }
+    }
+}
+
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
+    }
+}

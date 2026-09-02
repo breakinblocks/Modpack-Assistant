@@ -8,8 +8,6 @@ automatic clipboard copying, which falls back to click-to-copy chat.
 Every command is available as `/modpackassistant ...` or `/ma ...`. Camel-case names also accept
 their lowercase spelling (`/ma scanores` works the same as `/ma scanOres`).
 
-The full behavioural specification is in [`docs/modpackassistant-spec.md`](docs/modpackassistant-spec.md).
-
 ## Commands
 
 Admin and player (permission level 2 unless noted):
@@ -59,17 +57,6 @@ time. They report progress and can be stopped with `/ma cancel`.
 
 `config/modpackassistant-common.toml` holds the permission level for item inspection, the radius,
 iteration, and block caps for each expensive command, the report directory, and the job interval.
-
-## Building
-
-```
-./gradlew build              # jar in build/libs
-./gradlew runData            # regenerate lang and tag data
-./gradlew runGameTestServer  # run the GameTest suite
-./gradlew runServer          # dev server
-```
-
-Requires Java 21. Apache Commons CSV is bundled as a nested jar for report output.
 
 ## License
 
