@@ -12,7 +12,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import org.jetbrains.annotations.Nullable;
 
@@ -26,7 +26,7 @@ public final class AuditUnificationCommand {
                 .executes(context -> audit(context.getSource(), null))
                 .then(Commands.argument("namespace", StringArgumentType.word())
                         .suggests((context, builder) -> SharedSuggestionProvider.suggest(
-                                BuiltInRegistries.ITEM.getTagNames().map(TagKey::location).map(ResourceLocation::getNamespace).distinct(), builder))
+                                BuiltInRegistries.ITEM.listTagIds().map(TagKey::location).map(Identifier::getNamespace).distinct(), builder))
                         .executes(context -> audit(context.getSource(), StringArgumentType.getString(context, "namespace"))));
     }
 

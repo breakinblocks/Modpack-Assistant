@@ -42,7 +42,7 @@ public final class KillCommand {
                         .executes(context -> kill(context.getSource(), KillTypeArgument.get(context, "type"))))
                 .then(Commands.literal("by")
                         .then(Commands.argument("entity", ResourceArgument.resource(buildContext, Registries.ENTITY_TYPE))
-                                .suggests(SuggestionProviders.SUMMONABLE_ENTITIES)
+                                .suggests(SuggestionProviders.cast(SuggestionProviders.SUMMONABLE_ENTITIES))
                                 .executes(context -> killByType(context, ResourceArgument.getSummonableEntityType(context, "entity")))));
     }
 
@@ -50,7 +50,7 @@ public final class KillCommand {
         ServerLevel level = source.getLevel();
         ServerPlayer caller = CommandResults.player(source);
         Component typeName = type.label().get();
-        Component dimension = Component.literal(level.dimension().location().toString());
+        Component dimension = Component.literal(level.dimension().identifier().toString());
         source.sendSuccess(() -> Messages.KILL_START.get(typeName, dimension), true);
 
         int killed = switch (type) {
@@ -71,7 +71,7 @@ public final class KillCommand {
         CommandResults.player(source);
         EntityType<?> type = holder.value();
         Component typeName = type.getDescription();
-        Component dimension = Component.literal(level.dimension().location().toString());
+        Component dimension = Component.literal(level.dimension().identifier().toString());
         source.sendSuccess(() -> Messages.KILL_START_BYPASS.get(typeName, dimension), true);
 
         int killed;
@@ -95,7 +95,7 @@ public final class KillCommand {
         int killed = 0;
         for (ServerPlayer player : new ArrayList<>(level.players())) {
             if (filter.test(player) && !player.isRemoved()) {
-                player.kill();
+                player.kill(level);
                 killed++;
             }
         }
@@ -110,7 +110,7 @@ public final class KillCommand {
             if (entity.isRemoved() || entity instanceof Player) {
                 continue;
             }
-            if (respectProtection && entity.getType().is(MATags.KILL_PROTECTED)) {
+            if (respectProtection && entity.is(MATags.KILL_PROTECTED)) {
                 continue;
             }
             if (filter.test(entity)) {

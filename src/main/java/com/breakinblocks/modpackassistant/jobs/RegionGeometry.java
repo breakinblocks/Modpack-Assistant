@@ -21,8 +21,8 @@ public record RegionGeometry(ChunkPos center, int radius) {
 
     public List<ChunkPos> chunks() {
         List<ChunkPos> chunks = new ArrayList<>(chunkCount());
-        for (int x = center.x - radius; x <= center.x + radius; x++) {
-            for (int z = center.z - radius; z <= center.z + radius; z++) {
+        for (int x = center.x() - radius; x <= center.x() + radius; x++) {
+            for (int z = center.z() - radius; z <= center.z() + radius; z++) {
                 chunks.add(new ChunkPos(x, z));
             }
         }
@@ -34,11 +34,11 @@ public record RegionGeometry(ChunkPos center, int radius) {
     }
 
     public static int minY(LevelHeightAccessor level) {
-        return level.getMinBuildHeight();
+        return level.getMinY();
     }
 
     public static int maxY(LevelHeightAccessor level) {
-        return level.getMaxBuildHeight() - 1;
+        return level.getMaxY();
     }
 
     public static void forEachBlock(ChunkPos chunk, int minY, int maxY, boolean topDown, Consumer<BlockPos> consumer) {

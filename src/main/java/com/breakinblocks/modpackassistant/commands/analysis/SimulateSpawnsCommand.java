@@ -22,8 +22,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
@@ -64,34 +64,34 @@ public final class SimulateSpawnsCommand {
         }
 
         boolean sameDimension = level == player.level();
-        BlockPos anchor = sameDimension ? player.blockPosition() : level.getSharedSpawnPos();
-        ChunkPos anchorChunk = new ChunkPos(anchor);
+        BlockPos anchor = sameDimension ? player.blockPosition() : level.getRespawnData().pos();
+        ChunkPos anchorChunk = ChunkPos.containing(anchor);
         List<ChunkPos> matching = new ArrayList<>();
         TreeSet<String> present = new TreeSet<>();
         for (int x = -SAMPLE_CHUNK_RADIUS; x <= SAMPLE_CHUNK_RADIUS; x++) {
             for (int z = -SAMPLE_CHUNK_RADIUS; z <= SAMPLE_CHUNK_RADIUS; z++) {
-                ChunkPos chunk = new ChunkPos(anchorChunk.x + x, anchorChunk.z + z);
-                if (!level.getChunkSource().hasChunk(chunk.x, chunk.z)) {
+                ChunkPos chunk = new ChunkPos(anchorChunk.x() + x, anchorChunk.z() + z);
+                if (!level.getChunkSource().hasChunk(chunk.x(), chunk.z())) {
                     continue;
                 }
                 BlockPos surface = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING, chunk.getMiddleBlockPosition(0));
                 Holder<Biome> at = level.getBiome(surface);
-                at.unwrapKey().map(ResourceKey::location).map(ResourceLocation::toString).ifPresent(present::add);
+                at.unwrapKey().map(ResourceKey::identifier).map(Identifier::toString).ifPresent(present::add);
                 if (at.is(biome.key())) {
                     matching.add(chunk);
                 }
             }
         }
-        ResourceLocation biomeId = biome.key().location();
+        Identifier biomeId = biome.key().identifier();
         if (matching.isEmpty()) {
-            return CommandResults.fail(source, Messages.SPAWNS_NO_BIOME.get(biomeId, level.dimension().location(), String.join(", ", present)));
+            return CommandResults.fail(source, Messages.SPAWNS_NO_BIOME.get(biomeId, level.dimension().identifier(), String.join(", ", present)));
         }
 
         Vec3 virtualPlayer = sameDimension ? player.position() : Vec3.atCenterOf(anchor);
         SpawnSimulator simulator = new SpawnSimulator(level, biome, matching, virtualPlayer, ticks);
-        ReportWriter.Context reportContext = new ReportWriter.Context(source, "/ma simulateSpawns " + biomeId + " " + level.dimension().location() + " " + ticks)
+        ReportWriter.Context reportContext = new ReportWriter.Context(source, "/ma simulateSpawns " + biomeId + " " + level.dimension().identifier() + " " + ticks)
                 .note("biome", biomeId)
-                .note("target_dimension", level.dimension().location())
+                .note("target_dimension", level.dimension().identifier())
                 .note("sampled_chunks", matching.size())
                 .note("simulated_ticks", ticks)
                 .note("virtual_player", virtualPlayer);

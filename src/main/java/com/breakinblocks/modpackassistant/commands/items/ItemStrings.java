@@ -1,8 +1,11 @@
 package com.breakinblocks.modpackassistant.commands.items;
 
-import net.minecraft.commands.arguments.item.ItemInput;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.component.DataComponentPatch;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.item.ItemStack;
 
 public final class ItemStrings {
@@ -18,13 +21,32 @@ public final class ItemStrings {
     }
 
     public static String giveString(ItemStack stack, HolderLookup.Provider lookup) {
-        return new ItemInput(stack.getItemHolder(), stack.getComponentsPatch()).serialize(lookup);
+        return itemId(stack) + componentBlock(stack, lookup);
     }
 
     public static String componentBlock(ItemStack stack, HolderLookup.Provider lookup) {
-        String full = giveString(stack, lookup);
-        String id = itemId(stack);
-        return full.startsWith(id) ? full.substring(id.length()) : full;
+        DataComponentPatch patch = stack.getComponentsPatch();
+        if (patch.isEmpty()) {
+            return "";
+        }
+        Tag encoded = DataComponentPatch.CODEC.encodeStart(lookup.createSerializationContext(NbtOps.INSTANCE), patch).getOrThrow();
+        if (!(encoded instanceof CompoundTag components) || components.isEmpty()) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder("[");
+        boolean first = true;
+        for (String key : components.keySet()) {
+            if (!first) {
+                builder.append(',');
+            }
+            first = false;
+            builder.append(key);
+            Tag value = components.get(key);
+            if (!key.startsWith("!") && value != null) {
+                builder.append('=').append(value);
+            }
+        }
+        return builder.append(']').toString();
     }
 
     public static String countedGiveString(ItemStack stack, HolderLookup.Provider lookup) {

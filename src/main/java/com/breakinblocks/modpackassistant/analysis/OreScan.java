@@ -5,7 +5,7 @@ import com.breakinblocks.modpackassistant.report.CsvWriter;
 import com.breakinblocks.modpackassistant.report.ReportWriter;
 import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -18,13 +18,13 @@ import java.util.List;
 import java.util.Map;
 
 public final class OreScan {
-    public record Entry(ResourceLocation block, long count, double percent, int lowestY, int highestY, int peakY) {
+    public record Entry(Identifier block, long count, double percent, int lowestY, int highestY, int peakY) {
     }
 
     private final int minY;
     private final int maxY;
-    private final Object2LongOpenHashMap<ResourceLocation> totals = new Object2LongOpenHashMap<>();
-    private final Map<ResourceLocation, int[]> perHeight = new HashMap<>();
+    private final Object2LongOpenHashMap<Identifier> totals = new Object2LongOpenHashMap<>();
+    private final Map<Identifier, int[]> perHeight = new HashMap<>();
     private long total;
     private int chunksScanned;
 
@@ -56,7 +56,7 @@ public final class OreScan {
             if (state.isAir() || !state.is(Tags.Blocks.ORES)) {
                 return;
             }
-            ResourceLocation key = BuiltInRegistries.BLOCK.getKey(state.getBlock());
+            Identifier key = BuiltInRegistries.BLOCK.getKey(state.getBlock());
             totals.addTo(key, 1L);
             perHeight.computeIfAbsent(key, ignored -> new int[maxY - minY + 1])[blockPos.getY() - minY]++;
             total++;

@@ -13,10 +13,10 @@ public final class DataGen {
     }
 
     @SubscribeEvent
-    public static void gather(GatherDataEvent event) {
+    public static void gather(GatherDataEvent.Client event) {
         DataGenerator generator = event.getGenerator();
         PackOutput output = generator.getPackOutput();
-        generator.addProvider(event.includeClient(), new LangProvider(output));
-        generator.addProvider(event.includeServer(), new EntityTagProvider(output, event.getLookupProvider(), event.getExistingFileHelper()));
+        generator.addProvider(true, new LangProvider(output));
+        generator.addProvider(true, new EntityTagProvider(output, event.getLookupProvider()));
     }
 }

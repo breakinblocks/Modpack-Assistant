@@ -11,9 +11,9 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
-import net.minecraft.commands.arguments.ResourceLocationArgument;
+import net.minecraft.commands.arguments.IdentifierArgument;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.crafting.RecipeType;
 import org.jetbrains.annotations.Nullable;
 
@@ -25,21 +25,21 @@ public final class FindConflictsCommand {
         return Commands.literal("findConflicts")
                 .requires(MAPermissions.GAMEMASTER)
                 .executes(context -> find(context.getSource(), null))
-                .then(Commands.argument("type", ResourceLocationArgument.id())
+                .then(Commands.argument("type", IdentifierArgument.id())
                         .suggests((context, builder) -> SharedSuggestionProvider.suggestResource(BuiltInRegistries.RECIPE_TYPE.keySet(), builder))
-                        .executes(context -> find(context.getSource(), ResourceLocationArgument.getId(context, "type"))));
+                        .executes(context -> find(context.getSource(), IdentifierArgument.getId(context, "type"))));
     }
 
-    private static int find(CommandSourceStack source, @Nullable ResourceLocation typeId) {
+    private static int find(CommandSourceStack source, @Nullable Identifier typeId) {
         RecipeType<?> filter = null;
         if (typeId != null) {
-            filter = BuiltInRegistries.RECIPE_TYPE.get(typeId);
+            filter = BuiltInRegistries.RECIPE_TYPE.getValue(typeId);
             if (filter == null) {
                 return CommandResults.fail(source, Messages.UNKNOWN_RECIPE_TYPE.get(typeId));
             }
         }
 
-        RecipeConflictFinder finder = new RecipeConflictFinder(source.registryAccess());
+        RecipeConflictFinder finder = new RecipeConflictFinder(source.getLevel());
         finder.prepare(source.getServer().getRecipeManager().getRecipes(), filter);
         ReportWriter.Context context = new ReportWriter.Context(source, "/ma findConflicts" + (typeId == null ? "" : " " + typeId))
                 .note("recipe_count", finder.recipeCount())

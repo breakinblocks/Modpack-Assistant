@@ -6,6 +6,7 @@ import com.breakinblocks.modpackassistant.util.Messages;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 
 public final class ToggleDownfallCommand {
@@ -21,12 +22,13 @@ public final class ToggleDownfallCommand {
     }
 
     private static int toggle(CommandSourceStack source) {
-        ServerLevel overworld = source.getServer().overworld();
+        MinecraftServer server = source.getServer();
+        ServerLevel overworld = server.overworld();
         if (overworld.isRaining() || overworld.isThundering()) {
-            overworld.setWeatherParameters(DURATION_TICKS, 0, false, false);
+            server.setWeatherParameters(DURATION_TICKS, 0, false, false);
             return CommandResults.broadcast(source, Messages.WEATHER_CLEAR.get(DURATION_TICKS), 1);
         }
-        overworld.setWeatherParameters(0, DURATION_TICKS, true, false);
+        server.setWeatherParameters(0, DURATION_TICKS, true, false);
         return CommandResults.broadcast(source, Messages.WEATHER_RAIN.get(DURATION_TICKS), 1);
     }
 }

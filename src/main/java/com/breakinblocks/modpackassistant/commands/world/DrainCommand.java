@@ -162,7 +162,7 @@ public final class DrainCommand {
             }
             for (int i = from; i < to; i++) {
                 cursor.set(found.getLong(i));
-                level.blockUpdated(cursor, level.getBlockState(cursor).getBlock());
+                level.updateNeighborsAt(cursor, level.getBlockState(cursor).getBlock(), null);
             }
         }
     }

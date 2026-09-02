@@ -66,7 +66,7 @@ public final class TestStructureLootCommand {
 
         StructureLootResolver.Result resolved = StructureLootResolver.resolve(level, structure);
         if (resolved.isEmpty()) {
-            return CommandResults.fail(source, Messages.STRUCTLOOT_NONE.get(structure.key().location(), String.join(", ", resolved.tried())));
+            return CommandResults.fail(source, Messages.STRUCTLOOT_NONE.get(structure.key().identifier(), String.join(", ", resolved.tried())));
         }
 
         Direction facing = player.getDirection();
@@ -129,8 +129,8 @@ public final class TestStructureLootCommand {
             return;
         }
         List<String> lines = new ArrayList<>();
-        lines.add(found.table().location().getNamespace());
-        String path = found.table().location().getPath();
+        lines.add(found.table().identifier().getNamespace());
+        String path = found.table().identifier().getPath();
         while (!path.isEmpty() && lines.size() < 3) {
             int cut = Math.min(SIGN_LINE, path.length());
             lines.add(path.substring(0, cut));

@@ -75,7 +75,7 @@ public final class MineAreaCommand {
 
         ItemStack tool = new ItemStack(Items.NETHERITE_PICKAXE);
         if (mode.enchantment() != null) {
-            var holder = source.registryAccess().registryOrThrow(Registries.ENCHANTMENT).getHolderOrThrow(mode.enchantment());
+            var holder = source.registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(mode.enchantment());
             EnchantmentHelper.updateEnchantments(tool, mutable -> mutable.set(holder, mode.level()));
         }
 
@@ -134,7 +134,7 @@ public final class MineAreaCommand {
             run.message(Component.empty()
                     .append(Component.literal("[" + GROUPED.format(entry.getValue()) + "]").withStyle(Style.EMPTY
                             .withColor(ChatFormatting.YELLOW)
-                            .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Messages.SCAN_PERCENT.get(PERCENT.format(percent))))))
+                            .withHoverEvent(new HoverEvent.ShowText(Messages.SCAN_PERCENT.get(PERCENT.format(percent))))))
                     .append(Component.literal(" " + BuiltInRegistries.ITEM.getKey(entry.getKey())).withStyle(ChatFormatting.WHITE)));
         }
     }

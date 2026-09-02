@@ -7,7 +7,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 
 import java.util.ArrayList;
@@ -16,7 +16,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 public final class TagExporter<T> {
-    public record Entry(ResourceLocation id, List<String> tags) {
+    public record Entry(Identifier id, List<String> tags) {
     }
 
     private final Registry<T> registry;
@@ -27,7 +27,7 @@ public final class TagExporter<T> {
 
     public TagExporter(Registry<T> registry) {
         this.registry = registry;
-        this.holders = registry.holders().toList();
+        this.holders = registry.listElements().toList();
     }
 
     public int size() {
@@ -43,18 +43,18 @@ public final class TagExporter<T> {
     }
 
     public String registryName() {
-        return registry.key().location().toString();
+        return registry.key().identifier().toString();
     }
 
     public void process(int from, int to) {
         for (int i = from; i < Math.min(to, holders.size()); i++) {
             Holder.Reference<T> holder = holders.get(i);
-            List<String> tags = holder.tags().map(TagKey::location).map(ResourceLocation::toString).sorted().toList();
+            List<String> tags = holder.tags().map(TagKey::location).map(Identifier::toString).sorted().toList();
             if (tags.isEmpty()) {
                 untagged++;
             }
             distinctTags.addAll(tags);
-            entries.add(new Entry(holder.key().location(), tags));
+            entries.add(new Entry(holder.key().identifier(), tags));
         }
     }
 

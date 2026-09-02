@@ -40,7 +40,7 @@ public final class Run {
         this.dimension = dimension;
         if (source.getEntity() instanceof ServerPlayer player) {
             this.ownerId = player.getUUID();
-            this.ownerName = player.getGameProfile().getName();
+            this.ownerName = player.getGameProfile().name();
         } else {
             this.ownerId = null;
             this.ownerName = source.getTextName();

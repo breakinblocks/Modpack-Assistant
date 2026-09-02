@@ -12,7 +12,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 
 public final class FindUncraftablesCommand {
@@ -27,7 +27,7 @@ public final class FindUncraftablesCommand {
                 .executes(context -> find(context.getSource(), null))
                 .then(Commands.argument("namespace", StringArgumentType.word())
                         .suggests((context, builder) -> SharedSuggestionProvider.suggest(
-                                BuiltInRegistries.ITEM.keySet().stream().map(ResourceLocation::getNamespace).distinct().sorted(), builder))
+                                BuiltInRegistries.ITEM.keySet().stream().map(Identifier::getNamespace).distinct().sorted(), builder))
                         .executes(context -> find(context.getSource(), StringArgumentType.getString(context, "namespace"))));
     }
 

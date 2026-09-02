@@ -18,10 +18,10 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
-import net.minecraft.commands.arguments.ResourceLocationArgument;
+import net.minecraft.commands.arguments.IdentifierArgument;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.storage.loot.LootTable;
@@ -40,9 +40,10 @@ public final class SimulateLootCommand {
         return Commands.literal("simulateLoot")
                 .requires(MAPermissions.GAMEMASTER)
                 .then(Commands.argument("iterations", IntegerArgumentType.integer(1))
-                        .then(Commands.argument("loot_table", ResourceLocationArgument.id())
+                        .then(Commands.argument("loot_table", IdentifierArgument.id())
                                 .suggests((context, builder) -> SharedSuggestionProvider.suggestResource(
-                                        context.getSource().getServer().reloadableRegistries().getKeys(Registries.LOOT_TABLE), builder))
+                                        context.getSource().getServer().reloadableRegistries().lookup()
+                                                .lookupOrThrow(Registries.LOOT_TABLE).listElementIds().map(ResourceKey::identifier), builder))
                                 .executes(context -> simulate(context, 0.0F))
                                 .then(Commands.argument("luck", FloatArgumentType.floatArg())
                                         .executes(context -> simulate(context, FloatArgumentType.getFloat(context, "luck"))))));
@@ -53,13 +54,13 @@ public final class SimulateLootCommand {
         ServerPlayer player = CommandResults.player(source);
         ServerLevel level = source.getLevel();
         int iterations = IntegerArgumentType.getInteger(context, "iterations");
-        ResourceLocation tableId = ResourceLocationArgument.getId(context, "loot_table");
+        Identifier tableId = IdentifierArgument.getId(context, "loot_table");
 
         if (iterations > MAConfig.maxLootIterations()) {
             return CommandResults.fail(source, Messages.TOO_MANY_ITERATIONS.get(iterations, MAConfig.maxLootIterations(), "max_loot_iterations"));
         }
         ResourceKey<LootTable> key = ResourceKey.create(Registries.LOOT_TABLE, tableId);
-        if (!level.getServer().reloadableRegistries().getKeys(Registries.LOOT_TABLE).contains(tableId)) {
+        if (level.getServer().reloadableRegistries().lookup().lookupOrThrow(Registries.LOOT_TABLE).get(key).isEmpty()) {
             return CommandResults.fail(source, Messages.UNKNOWN_LOOT_TABLE.get(tableId));
         }
         LootTable table = level.getServer().reloadableRegistries().getLootTable(key);

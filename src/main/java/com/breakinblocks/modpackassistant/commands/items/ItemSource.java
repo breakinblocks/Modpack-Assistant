@@ -6,12 +6,14 @@ import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.neoforged.neoforge.capabilities.Capabilities;
-import net.neoforged.neoforge.items.IItemHandler;
+import net.neoforged.neoforge.transfer.ResourceHandler;
+import net.neoforged.neoforge.transfer.item.ItemResource;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -28,17 +30,18 @@ public enum ItemSource {
     HOTBAR("hotbar", player -> slots(player, 0, Inventory.getSelectionSize())),
     INVENTORY("inventory", player -> slots(player, Inventory.getSelectionSize(), Inventory.INVENTORY_SIZE)),
     INVENTORY_AND_HOTBAR("inventory_and_hotbar", player -> slots(player, 0, Inventory.INVENTORY_SIZE)),
-    ARMOR("armor", player -> nonEmpty(player.getInventory().armor)),
+    ARMOR("armor", ItemSource::armor),
     EVERYTHING("everything", player -> {
         List<ItemStack> items = slots(player, 0, Inventory.INVENTORY_SIZE);
-        items.addAll(nonEmpty(player.getInventory().armor));
-        items.addAll(nonEmpty(player.getInventory().offhand));
+        items.addAll(armor(player));
+        items.addAll(single(player.getOffhandItem()));
         return items;
     }),
     TARGET_INVENTORY("target_inventory", ItemSource::targetInventory);
 
     public static final double TARGET_RANGE = 20.0D;
     private static final ItemSource[] VALUES = values();
+    private static final EquipmentSlot[] ARMOR_SLOTS = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
 
     private final String name;
     private final Function<ServerPlayer, List<ItemStack>> collector;
@@ -95,9 +98,10 @@ public enum ItemSource {
         return items;
     }
 
-    private static List<ItemStack> nonEmpty(Iterable<ItemStack> stacks) {
-        List<ItemStack> items = new ArrayList<>();
-        for (ItemStack stack : stacks) {
+    private static List<ItemStack> armor(ServerPlayer player) {
+        List<ItemStack> items = new ArrayList<>(ARMOR_SLOTS.length);
+        for (EquipmentSlot slot : ARMOR_SLOTS) {
+            ItemStack stack = player.getItemBySlot(slot);
             if (!stack.isEmpty()) {
                 items.add(stack);
             }
@@ -111,15 +115,16 @@ public enum ItemSource {
         if (!(hit instanceof BlockHitResult blockHit) || hit.getType() == HitResult.Type.MISS) {
             return items;
         }
-        IItemHandler handler = player.level().getCapability(Capabilities.ItemHandler.BLOCK, blockHit.getBlockPos(), blockHit.getDirection());
+        ResourceHandler<ItemResource> handler = player.level().getCapability(Capabilities.Item.BLOCK, blockHit.getBlockPos(), blockHit.getDirection());
         if (handler == null) {
             return items;
         }
-        for (int slot = 0; slot < handler.getSlots(); slot++) {
-            ItemStack stack = handler.getStackInSlot(slot);
-            if (!stack.isEmpty()) {
-                items.add(stack);
+        for (int index = 0; index < handler.size(); index++) {
+            ItemResource resource = handler.getResource(index);
+            if (resource.isEmpty()) {
+                continue;
             }
+            items.add(resource.toStack(handler.getAmountAsInt(index)));
         }
         return items;
     }

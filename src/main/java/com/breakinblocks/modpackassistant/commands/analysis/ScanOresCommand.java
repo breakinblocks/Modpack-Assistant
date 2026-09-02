@@ -122,7 +122,7 @@ public final class ScanOresCommand {
         int white = index % 2 == 0 ? Objects.requireNonNull(ChatFormatting.WHITE.getColor()) : ALT_WHITE;
         int yellow = index % 2 == 0 ? Objects.requireNonNull(ChatFormatting.YELLOW.getColor()) : ALT_YELLOW;
         Style bracket = Style.EMPTY.withColor(yellow);
-        Style count = bracket.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Messages.SCAN_PERCENT.get(PERCENT.format(entry.percent()))));
+        Style count = bracket.withHoverEvent(new HoverEvent.ShowText(Messages.SCAN_PERCENT.get(PERCENT.format(entry.percent()))));
         return Component.empty()
                 .append(Component.literal("[").withStyle(bracket))
                 .append(Component.literal(GROUPED.format(entry.count())).withStyle(count))

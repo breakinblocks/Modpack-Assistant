@@ -7,27 +7,25 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.JsonOps;
-import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
-import net.minecraft.util.RandomSource;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.npc.Villager;
-import net.minecraft.world.entity.npc.VillagerProfession;
-import net.minecraft.world.entity.npc.VillagerTrades;
+import net.minecraft.util.context.ContextMap;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.RecipeHolder;
-import net.minecraft.world.item.trading.MerchantOffer;
+import net.minecraft.world.item.crafting.display.RecipeDisplay;
+import net.minecraft.world.item.crafting.display.SlotDisplayContext;
+import net.minecraft.world.item.trading.VillagerTrade;
 import net.minecraft.world.level.storage.loot.LootTable;
 import org.jetbrains.annotations.Nullable;
 
@@ -39,8 +37,6 @@ import java.util.Set;
 import java.util.TreeMap;
 
 public final class ObtainabilityIndex {
-    private static final int TRADE_SAMPLES = 8;
-
     private final ServerLevel level;
     private final Set<Item> fromRecipes = new HashSet<>();
     private final Set<Item> fromLoot = new HashSet<>();
@@ -48,7 +44,7 @@ public final class ObtainabilityIndex {
     private final Set<Item> fromCreative = new HashSet<>();
     private final List<String> checked = new ArrayList<>();
     private final List<String> unchecked = new ArrayList<>();
-    private final List<ResourceLocation> lootTableIds;
+    private final List<ResourceKey<LootTable>> lootTableIds;
     private final Map<String, List<Item>> uncraftable = new TreeMap<>();
     private final Map<String, List<Item>> creativeOnly = new TreeMap<>();
     private int uncraftableCount;
@@ -56,7 +52,8 @@ public final class ObtainabilityIndex {
 
     public ObtainabilityIndex(ServerLevel level) {
         this.level = level;
-        this.lootTableIds = new ArrayList<>(level.getServer().reloadableRegistries().getKeys(Registries.LOOT_TABLE));
+        this.lootTableIds = level.getServer().reloadableRegistries().lookup()
+                .lookupOrThrow(Registries.LOOT_TABLE).listElementIds().toList();
     }
 
     public int lootTableCount() {
@@ -76,24 +73,28 @@ public final class ObtainabilityIndex {
     }
 
     public void indexRecipes() {
-        for (RecipeHolder<?> holder : level.getServer().getRecipeManager().getRecipes()) {
+        ContextMap displayContext = SlotDisplayContext.fromLevel(level);
+        var recipes = level.getServer().getRecipeManager().getRecipes();
+        for (RecipeHolder<?> holder : recipes) {
             try {
-                ItemStack result = holder.value().getResultItem(level.registryAccess());
-                if (!result.isEmpty()) {
-                    fromRecipes.add(result.getItem());
+                for (RecipeDisplay display : holder.value().display()) {
+                    for (ItemStack result : display.result().resolveForStacks(displayContext)) {
+                        if (!result.isEmpty()) {
+                            fromRecipes.add(result.getItem());
+                        }
+                    }
                 }
             } catch (Exception e) {
-                ModpackAssistant.LOGGER.debug("Recipe {} has no static result", holder.id());
+                ModpackAssistant.LOGGER.debug("Recipe {} has no static result", holder.id().identifier());
             }
         }
-        checked.add("recipe results (" + level.getServer().getRecipeManager().getRecipes().size() + " recipes)");
+        checked.add("recipe results (" + recipes.size() + " recipes)");
     }
 
     public void indexLootTables(int from, int to) {
         DynamicOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, level.registryAccess());
         for (int i = from; i < Math.min(to, lootTableIds.size()); i++) {
-            ResourceLocation id = lootTableIds.get(i);
-            LootTable table = level.getServer().reloadableRegistries().getLootTable(ResourceKey.create(Registries.LOOT_TABLE, id));
+            LootTable table = level.getServer().reloadableRegistries().getLootTable(lootTableIds.get(i));
             LootTable.DIRECT_CODEC.encodeStart(ops, table).result().ifPresent(this::walkLootJson);
         }
         if (to >= lootTableIds.size()) {
@@ -108,10 +109,10 @@ public final class ObtainabilityIndex {
                 String type = object.get("type").getAsString();
                 String name = object.get("name").getAsString();
                 if (type.equals("minecraft:item") || type.equals("item")) {
-                    BuiltInRegistries.ITEM.getOptional(ResourceLocation.parse(name)).ifPresent(fromLoot::add);
+                    BuiltInRegistries.ITEM.getOptional(Identifier.parse(name)).ifPresent(fromLoot::add);
                 } else if (type.equals("minecraft:tag") || type.equals("tag")) {
-                    TagKey<Item> tag = TagKey.create(Registries.ITEM, ResourceLocation.parse(name));
-                    BuiltInRegistries.ITEM.getTag(tag).ifPresent(set -> set.forEach(holder -> fromLoot.add(holder.value())));
+                    TagKey<Item> tag = TagKey.create(Registries.ITEM, Identifier.parse(name));
+                    BuiltInRegistries.ITEM.get(tag).ifPresent(set -> set.forEach(holder -> fromLoot.add(holder.value())));
                 }
             }
             object.entrySet().forEach(entry -> walkLootJson(entry.getValue()));
@@ -121,57 +122,33 @@ public final class ObtainabilityIndex {
     }
 
     public void indexTrades() {
-        Villager villager = EntityType.VILLAGER.create(level);
-        if (villager == null) {
-            unchecked.add("villager trades (could not create a throwaway villager)");
+        Registry<VillagerTrade> trades = level.registryAccess().lookupOrThrow(Registries.VILLAGER_TRADE);
+        DynamicOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, level.registryAccess());
+        int listings = 0;
+        int unreadable = 0;
+        for (VillagerTrade trade : trades) {
+            JsonElement encoded = VillagerTrade.CODEC.encodeStart(ops, trade).result().orElse(null);
+            if (encoded == null || !encoded.isJsonObject()) {
+                unreadable++;
+                continue;
+            }
+            listings++;
+            collectGiven(encoded.getAsJsonObject().get("gives"));
+        }
+        checked.add("villager and wandering trader trades (" + listings + " listings from the villager_trade registry)");
+        if (unreadable > 0) {
+            unchecked.add("villager trades that could not be encoded (" + unreadable + " listings)");
+        }
+    }
+
+    private void collectGiven(@Nullable JsonElement gives) {
+        if (gives == null) {
             return;
         }
-        RandomSource random = RandomSource.create(0L);
-        int listings = 0;
-        int skippedMaps = 0;
-        for (Map.Entry<VillagerProfession, Int2ObjectMap<VillagerTrades.ItemListing[]>> profession : VillagerTrades.TRADES.entrySet()) {
-            for (VillagerTrades.ItemListing[] tier : profession.getValue().values()) {
-                for (VillagerTrades.ItemListing listing : tier) {
-                    if (isMapListing(listing)) {
-                        skippedMaps++;
-                        continue;
-                    }
-                    listings++;
-                    sampleListing(listing, villager, random);
-                }
-            }
-        }
-        for (VillagerTrades.ItemListing[] tier : VillagerTrades.WANDERING_TRADER_TRADES.values()) {
-            for (VillagerTrades.ItemListing listing : tier) {
-                if (isMapListing(listing)) {
-                    skippedMaps++;
-                    continue;
-                }
-                listings++;
-                sampleListing(listing, villager, random);
-            }
-        }
-        villager.discard();
-        checked.add("villager and wandering trader trades (" + listings + " listings sampled " + TRADE_SAMPLES + " times each)");
-        if (skippedMaps > 0) {
-            unchecked.add("treasure map trades (" + skippedMaps + " listings, skipped because they search for structures)");
-        }
-    }
-
-    private static boolean isMapListing(VillagerTrades.ItemListing listing) {
-        return listing.getClass().getSimpleName().contains("Map");
-    }
-
-    private void sampleListing(VillagerTrades.ItemListing listing, Villager villager, RandomSource random) {
-        for (int i = 0; i < TRADE_SAMPLES; i++) {
-            try {
-                MerchantOffer offer = listing.getOffer(villager, random);
-                if (offer != null && !offer.getResult().isEmpty()) {
-                    fromTrades.add(offer.getResult().getItem());
-                }
-            } catch (Exception e) {
-                ModpackAssistant.LOGGER.debug("Trade listing {} could not be sampled", listing.getClass().getName(), e);
-            }
+        if (gives.isJsonPrimitive()) {
+            BuiltInRegistries.ITEM.getOptional(Identifier.parse(gives.getAsString())).ifPresent(fromTrades::add);
+        } else if (gives.isJsonObject() && gives.getAsJsonObject().has("id")) {
+            BuiltInRegistries.ITEM.getOptional(Identifier.parse(gives.getAsJsonObject().get("id").getAsString())).ifPresent(fromTrades::add);
         }
     }
 
@@ -191,9 +168,9 @@ public final class ObtainabilityIndex {
     }
 
     public void finish(@Nullable String namespace) {
-        for (Holder.Reference<Item> holder : BuiltInRegistries.ITEM.holders().toList()) {
+        for (Holder.Reference<Item> holder : BuiltInRegistries.ITEM.listElements().toList()) {
             Item item = holder.value();
-            ResourceLocation id = holder.key().location();
+            Identifier id = holder.key().identifier();
             if (item == Items.AIR || (namespace != null && !id.getNamespace().equals(namespace))) {
                 continue;
             }
@@ -233,7 +210,7 @@ public final class ObtainabilityIndex {
     private static void appendItems(List<String> lines, Map<String, List<Item>> byMod) {
         byMod.forEach((mod, items) -> {
             lines.add("[" + mod + "]");
-            items.stream().map(BuiltInRegistries.ITEM::getKey).map(ResourceLocation::toString).sorted().forEach(id -> lines.add("    " + id));
+            items.stream().map(BuiltInRegistries.ITEM::getKey).map(Identifier::toString).sorted().forEach(id -> lines.add("    " + id));
         });
     }
 

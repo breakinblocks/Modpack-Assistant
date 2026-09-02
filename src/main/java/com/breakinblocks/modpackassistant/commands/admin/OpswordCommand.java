@@ -43,13 +43,13 @@ public final class OpswordCommand {
 
     private static int give(CommandSourceStack source) throws CommandSyntaxException {
         ServerPlayer player = CommandResults.player(source);
-        Registry<Enchantment> registry = source.registryAccess().registryOrThrow(Registries.ENCHANTMENT);
+        Registry<Enchantment> registry = source.registryAccess().lookupOrThrow(Registries.ENCHANTMENT);
 
         ItemStack sword = new ItemStack(Items.NETHERITE_SWORD);
         sword.set(DataComponents.CUSTOM_NAME, Messages.OPSWORD_NAME.get());
         EnchantmentHelper.updateEnchantments(sword, mutable -> {
             for (ResourceKey<Enchantment> key : ENCHANTMENTS) {
-                mutable.set(registry.getHolderOrThrow(key), LEVEL);
+                mutable.set(registry.getOrThrow(key), LEVEL);
             }
         });
 

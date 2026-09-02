@@ -7,9 +7,13 @@ import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.GameRules;
+import net.minecraft.world.clock.ServerClockManager;
+import net.minecraft.world.clock.WorldClock;
+import net.minecraft.world.level.gamerules.GameRules;
 
 public final class DevEnvCommand {
     private static final long NOON = 6000L;
@@ -27,12 +31,16 @@ public final class DevEnvCommand {
     private static int set(CommandSourceStack source, boolean enabled) {
         MinecraftServer server = source.getServer();
         GameRules rules = server.getGameRules();
-        rules.getRule(GameRules.RULE_DAYLIGHT).set(!enabled, server);
-        rules.getRule(GameRules.RULE_DOMOBSPAWNING).set(!enabled, server);
-        rules.getRule(GameRules.RULE_WEATHER_CYCLE).set(!enabled, server);
+        rules.set(GameRules.ADVANCE_TIME, !enabled, server);
+        rules.set(GameRules.SPAWN_MOBS, !enabled, server);
+        rules.set(GameRules.ADVANCE_WEATHER, !enabled, server);
         if (enabled) {
+            ServerClockManager clocks = server.clockManager();
+            for (Holder<WorldClock> clock : server.registryAccess().lookupOrThrow(Registries.WORLD_CLOCK).listElements().toList()) {
+                clocks.setTotalTicks(clock, NOON);
+            }
             for (ServerLevel level : server.getAllLevels()) {
-                level.setDayTime(NOON);
+                level.updateSkyBrightness();
             }
             return CommandResults.broadcast(source, Messages.DEVENV_ON.get(), 1);
         }

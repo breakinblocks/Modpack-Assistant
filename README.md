@@ -1,6 +1,6 @@
 # Modpack Assistant
 
-Server-side commands for modpack development and server administration on NeoForge 1.21.1.
+Server-side commands for modpack development and server administration on NeoForge 26.1.2.
 World inspection, region editing, loot and spawn simulation, recipe and tag audits, and the usual
 admin conveniences. No blocks, items, or GUIs. Vanilla clients work with every feature except
 automatic clipboard copying, which falls back to click-to-copy chat.

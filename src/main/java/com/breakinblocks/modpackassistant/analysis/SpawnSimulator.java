@@ -9,12 +9,12 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
-import net.minecraft.util.random.WeightedRandomList;
+import net.minecraft.util.random.WeightedList;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobCategory;
-import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.SpawnPlacements;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.biome.Biome;
@@ -143,7 +143,7 @@ public final class SpawnSimulator {
         int spawnedThisChunk = 0;
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         for (int attempt = 0; attempt < GROUP_ATTEMPTS; attempt++) {
-            WeightedRandomList<MobSpawnSettings.SpawnerData> potential = generator.getMobsAt(biome, level.structureManager(), category, pos);
+            WeightedList<MobSpawnSettings.SpawnerData> potential = generator.getMobsAt(biome, level.structureManager(), category, pos);
             Optional<MobSpawnSettings.SpawnerData> picked = potential.getRandom(random);
             if (picked.isEmpty()) {
                 return;
@@ -155,19 +155,19 @@ public final class SpawnSimulator {
             cursor.set(pos);
             for (int member = 0; member < groupSize; member++) {
                 cursor.set(cursor.getX() + random.nextInt(6) - random.nextInt(6), cursor.getY(), cursor.getZ() + random.nextInt(6) - random.nextInt(6));
-                TypeStat typeStat = typeStats.computeIfAbsent(data.type, TypeStat::new);
+                TypeStat typeStat = typeStats.computeIfAbsent(data.type(), TypeStat::new);
                 typeStat.attempts++;
                 categoryStat.attempts++;
                 double memberDistanceSq = playerPos.distanceToSqr(cursor.getX() + 0.5D, cursor.getY(), cursor.getZ() + 0.5D);
                 if (!isValidPosition(category, data, cursor, memberDistanceSq)) {
                     continue;
                 }
-                Mob mob = throwawayMob(data.type, cursor);
+                Mob mob = throwawayMob(data.type(), cursor);
                 if (mob == null) {
                     continue;
                 }
                 clusterLimit = mob.getMaxSpawnClusterSize();
-                boolean passes = mob.checkSpawnRules(level, MobSpawnType.NATURAL) && mob.checkSpawnObstruction(level);
+                boolean passes = mob.checkSpawnRules(level, EntitySpawnReason.NATURAL) && mob.checkSpawnObstruction(level);
                 mob.discard();
                 if (!passes) {
                     continue;
@@ -176,7 +176,7 @@ public final class SpawnSimulator {
                 categoryStat.individuals++;
                 categoryStat.current++;
                 categoryStat.peak = Math.max(categoryStat.peak, categoryStat.current);
-                population.add(new VirtualEntity(data.type, category, tick));
+                population.add(new VirtualEntity(data.type(), category, tick));
                 packSpawned = true;
                 if (++spawnedThisChunk >= clusterLimit) {
                     typeStat.packs++;
@@ -184,13 +184,13 @@ public final class SpawnSimulator {
                 }
             }
             if (packSpawned) {
-                typeStats.get(data.type).packs++;
+                typeStats.get(data.type()).packs++;
             }
         }
     }
 
     private boolean isValidPosition(MobCategory category, MobSpawnSettings.SpawnerData data, BlockPos pos, double distanceSq) {
-        EntityType<?> type = data.type;
+        EntityType<?> type = data.type();
         if (type.getCategory() == MobCategory.MISC || !type.canSummon()) {
             return false;
         }
@@ -200,33 +200,33 @@ public final class SpawnSimulator {
         if (!SpawnPlacements.isSpawnPositionOk(type, level, pos)) {
             return false;
         }
-        if (!SpawnPlacements.checkSpawnRules(type, level, MobSpawnType.NATURAL, pos, random)) {
+        if (!SpawnPlacements.checkSpawnRules(type, level, EntitySpawnReason.NATURAL, pos, random)) {
             return false;
         }
         return level.noCollision(type.getSpawnAABB(pos.getX() + 0.5D, pos.getY(), pos.getZ() + 0.5D));
     }
 
     private Mob throwawayMob(EntityType<?> type, BlockPos pos) {
-        Entity entity = type.create(level);
+        Entity entity = type.create(level, EntitySpawnReason.NATURAL);
         if (!(entity instanceof Mob mob)) {
             if (entity != null) {
                 entity.discard();
             }
             return null;
         }
-        mob.moveTo(pos.getX() + 0.5D, pos.getY(), pos.getZ() + 0.5D, random.nextFloat() * 360.0F, 0.0F);
+        mob.snapTo(pos.getX() + 0.5D, pos.getY(), pos.getZ() + 0.5D, random.nextFloat() * 360.0F, 0.0F);
         return mob;
     }
 
     private BlockPos randomPositionWithin(ChunkPos chunk) {
         int x = chunk.getMinBlockX() + random.nextInt(16);
         int z = chunk.getMinBlockZ() + random.nextInt(16);
-        LevelChunk loaded = level.getChunk(chunk.x, chunk.z);
+        LevelChunk loaded = level.getChunk(chunk.x(), chunk.z());
         int highest = loaded.getHighestFilledSectionIndex();
         int top = highest == -1
-                ? level.getMinBuildHeight()
+                ? level.getMinY()
                 : SectionPos.sectionToBlockCoord(loaded.getSectionYFromSectionIndex(highest)) + 15;
-        int y = Mth.randomBetweenInclusive(random, level.getMinBuildHeight(), Math.max(level.getMinBuildHeight(), top));
+        int y = Mth.randomBetweenInclusive(random, level.getMinY(), Math.max(level.getMinY(), top));
         return new BlockPos(x, y, z);
     }
 

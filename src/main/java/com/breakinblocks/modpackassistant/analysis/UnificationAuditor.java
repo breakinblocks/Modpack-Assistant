@@ -4,10 +4,9 @@ import com.breakinblocks.modpackassistant.report.CsvWriter;
 import com.breakinblocks.modpackassistant.report.ReportWriter;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import net.minecraft.core.Holder;
-import net.minecraft.core.HolderSet;
 import net.minecraft.core.Registry;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import org.jetbrains.annotations.Nullable;
 
@@ -21,7 +20,7 @@ import java.util.TreeMap;
 public final class UnificationAuditor {
     private static final Set<String> CONVENTIONAL_NAMESPACES = Set.of("c", "forge");
 
-    public record TagReport(String registry, ResourceLocation tag, List<ResourceLocation> entries) {
+    public record TagReport(String registry, Identifier tag, List<Identifier> entries) {
         public String family() {
             String path = tag.getPath();
             int slash = path.indexOf('/');
@@ -54,22 +53,21 @@ public final class UnificationAuditor {
     }
 
     public boolean isMaterialTag(TagKey<?> tag) {
-        ResourceLocation id = tag.location();
+        Identifier id = tag.location();
         boolean namespaceOk = namespaceFilter != null ? id.getNamespace().equals(namespaceFilter) : CONVENTIONAL_NAMESPACES.contains(id.getNamespace());
         return namespaceOk && id.getPath().indexOf('/') > 0;
     }
 
     public <T> void audit(Registry<T> registry) {
-        String registryName = registry.key().location().getPath();
-        registry.getTags().forEach(pair -> {
-            TagKey<T> tag = pair.getFirst();
+        String registryName = registry.key().identifier().getPath();
+        registry.listTags().forEach(set -> {
+            TagKey<T> tag = set.key();
             if (!isMaterialTag(tag)) {
                 return;
             }
-            HolderSet.Named<T> set = pair.getSecond();
-            List<ResourceLocation> entries = new ArrayList<>();
+            List<Identifier> entries = new ArrayList<>();
             for (Holder<T> holder : set) {
-                holder.unwrapKey().map(ResourceKey::location).ifPresent(entries::add);
+                holder.unwrapKey().map(ResourceKey::identifier).ifPresent(entries::add);
             }
             entries.sort(Comparator.naturalOrder());
             TagReport report = new TagReport(registryName, tag.location(), entries);
@@ -97,7 +95,7 @@ public final class UnificationAuditor {
         lines.add("=".repeat(60));
         unresolved.stream().sorted(Comparator.comparingInt((TagReport r) -> r.entries().size()).reversed().thenComparing(r -> r.tag().toString())).forEach(report -> {
             lines.add("[" + report.registry() + "] #" + report.tag() + " (" + report.entries().size() + ")");
-            for (ResourceLocation entry : report.entries()) {
+            for (Identifier entry : report.entries()) {
                 lines.add("    " + entry + "  (" + entry.getNamespace() + ")");
             }
         });
@@ -132,9 +130,9 @@ public final class UnificationAuditor {
         return csv.content();
     }
 
-    private static String join(List<ResourceLocation> entries) {
+    private static String join(List<Identifier> entries) {
         StringBuilder builder = new StringBuilder();
-        for (ResourceLocation entry : entries) {
+        for (Identifier entry : entries) {
             if (!builder.isEmpty()) {
                 builder.append(';');
             }

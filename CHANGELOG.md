@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Ported to Minecraft 26.1.2 / NeoForge 26.1.2.x, built on Java 25.
+- Weather and world time are now server-wide, so `/toggledownfall` and `/ma devenv` set them through the server rather than per level. `devenv` sets every registered world clock to noon.
+- Permission checks use the 26.1 permission API. `/ma devenv` toggles the renamed `advance_time`, `spawn_mobs` and `advance_weather` game rules.
+- Villager trade sources for `/ma findUncraftables` are read from the `villager_trade` datapack registry instead of the removed hardcoded trade tables.
+- Recipe inputs and results for `/ma findConflicts` come from `PlacementInfo` and recipe displays.
+- The structure loot test record is stored as server saved data at `data/modpackassistant/test_loot.dat`.
+- Datagen moved from `runData` to `runClientData`; the GameTest template moved to `data/modpackassistant/structure/empty.nbt`.
+
 ## 1.0.0
 
 ### Added

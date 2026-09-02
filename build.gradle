@@ -2,7 +2,7 @@ plugins {
     id 'java-library'
     id 'idea'
     id 'maven-publish'
-    id 'net.neoforged.moddev' version '2.0.140'
+    id 'net.neoforged.moddev' version '2.0.141'
 }
 
 tasks.named('wrapper', Wrapper).configure {
@@ -16,15 +16,11 @@ base {
     archivesName = mod_id
 }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
 neoForge {
     version = neo_version
 
-    parchment {
-        mappingsVersion = parchment_mappings_version
-        minecraftVersion = parchment_minecraft_version
-    }
 
     runs {
         configureEach {
@@ -49,8 +45,8 @@ neoForge {
             gameDirectory = project.file('run-gametest')
         }
 
-        data {
-            data()
+        clientData {
+            clientData()
             programArguments.addAll '--mod', mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
         }
     }
@@ -75,10 +71,6 @@ dependencies {
             strictly "[${commons_csv_version},)"
             prefer commons_csv_version
         }
-        exclude group: 'commons-io'
-        exclude group: 'commons-codec'
-    }
-    additionalRuntimeClasspath("org.apache.commons:commons-csv:${commons_csv_version}") {
         exclude group: 'commons-io'
         exclude group: 'commons-codec'
     }
@@ -108,7 +100,6 @@ tasks.withType(ProcessResources).configureEach {
             mod_authors          : mod_authors,
             mod_description      : mod_description,
             mod_license          : mod_license,
-            pack_format          : pack_format,
             loader_version_range : loader_version_range,
             neo_version_range    : neo_version_range,
             minecraft_version_range: minecraft_version_range
@@ -129,19 +120,12 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
-tasks.register('copyGameTestStructures', Copy) {
-    from "src/main/resources/data/${mod_id}/gametest/structures"
-    into "run-gametest/gameteststructures"
-    include '*.snbt'
-}
-
 tasks.register('cleanGameTestWorld', Delete) {
     delete "run-gametest/world"
 }
 
 tasks.named('runGameTestServer').configure {
     dependsOn 'cleanGameTestWorld'
-    dependsOn 'copyGameTestStructures'
 }
 
 publishing {

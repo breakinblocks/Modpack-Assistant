@@ -6,8 +6,8 @@ import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.QuartPos;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeSource;
@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 public final class BiomeSampler {
-    public record Entry(ResourceLocation biome, int samples, double percent, BlockPos nearest, double distance) {
+    public record Entry(Identifier biome, int samples, double percent, BlockPos nearest, double distance) {
     }
 
     private final BlockPos center;
@@ -29,8 +29,8 @@ public final class BiomeSampler {
     private final int y;
     private final BiomeSource source;
     private final Climate.Sampler sampler;
-    private final Object2IntOpenHashMap<ResourceLocation> counts = new Object2IntOpenHashMap<>();
-    private final Map<ResourceLocation, BlockPos> nearest = new HashMap<>();
+    private final Object2IntOpenHashMap<Identifier> counts = new Object2IntOpenHashMap<>();
+    private final Map<Identifier, BlockPos> nearest = new HashMap<>();
     private int samples;
 
     public BiomeSampler(ServerLevel level, BlockPos center, int radius, int interval, int y) {
@@ -69,7 +69,7 @@ public final class BiomeSampler {
     public void sampleRow(int z) {
         for (int x = center.getX() - radius; x <= center.getX() + radius; x += interval) {
             Holder<Biome> biome = source.getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(y), QuartPos.fromBlock(z), sampler);
-            ResourceLocation id = biome.unwrapKey().map(ResourceKey::location).orElse(ResourceLocation.withDefaultNamespace("unknown"));
+            Identifier id = biome.unwrapKey().map(ResourceKey::identifier).orElse(Identifier.withDefaultNamespace("unknown"));
             counts.addTo(id, 1);
             samples++;
             BlockPos pos = new BlockPos(x, y, z);

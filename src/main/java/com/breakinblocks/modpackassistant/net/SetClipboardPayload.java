@@ -22,7 +22,7 @@ public record SetClipboardPayload(String text) implements CustomPacketPayload {
     }
 
     public static void handle(SetClipboardPayload payload, IPayloadContext context) {
-        if (FMLEnvironment.dist.isClient()) {
+        if (FMLEnvironment.getDist().isClient()) {
             context.enqueueWork(() -> ClientClipboard.set(payload.text()));
         }
     }

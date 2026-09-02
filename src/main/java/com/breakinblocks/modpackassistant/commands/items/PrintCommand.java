@@ -57,7 +57,7 @@ public final class PrintCommand {
             if (copy) {
                 MANetworking.sendClipboard(player, ItemStrings.giveString(stack, lookup));
             }
-            stack.getTags().forEach(tag -> {
+            stack.tags().forEach(tag -> {
                 String tagString = "#" + tag.location();
                 source.sendSuccess(() -> Component.literal("- ").append(copyable(tagString, ChatFormatting.RED, Messages.PRINT_TAG_CLICK.get())), false);
             });
@@ -68,7 +68,7 @@ public final class PrintCommand {
     public static MutableComponent copyable(String value, ChatFormatting color, Component hover) {
         return Component.literal(value).withStyle(Style.EMPTY
                 .withColor(color)
-                .withClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, value))
-                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hover)));
+                .withClickEvent(new ClickEvent.CopyToClipboard(value))
+                .withHoverEvent(new HoverEvent.ShowText(hover)));
     }
 }

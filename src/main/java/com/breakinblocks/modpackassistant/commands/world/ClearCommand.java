@@ -24,7 +24,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.blocks.BlockPredicateArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
@@ -74,8 +74,8 @@ public final class ClearCommand {
                 if (state.is(Tags.Blocks.ORES)) {
                     return false;
                 }
-                ResourceLocation key = BuiltInRegistries.BLOCK.getKey(state.getBlock());
-                return ResourceLocation.DEFAULT_NAMESPACE.equals(key.getNamespace());
+                Identifier key = BuiltInRegistries.BLOCK.getKey(state.getBlock());
+                return Identifier.DEFAULT_NAMESPACE.equals(key.getNamespace());
             };
             case NOTHING -> block -> true;
         };
@@ -127,7 +127,7 @@ public final class ClearCommand {
             changed.add(immutable);
         });
         for (BlockPos pos : changed) {
-            level.blockUpdated(pos, Blocks.AIR);
+            level.updateNeighborsAt(pos, Blocks.AIR, null);
         }
         return changed.size();
     }

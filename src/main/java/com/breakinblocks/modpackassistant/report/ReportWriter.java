@@ -57,10 +57,10 @@ public final class ReportWriter {
             ServerLevel level = source.getLevel();
             entries.put("mod", ModpackAssistant.MOD_ID + " " + ModList.get().getModContainerById(ModpackAssistant.MOD_ID)
                     .map(container -> container.getModInfo().getVersion().toString()).orElse("unknown"));
-            entries.put("minecraft", SharedConstants.getCurrentVersion().getName());
+            entries.put("minecraft", SharedConstants.getCurrentVersion().name());
             entries.put("command", command);
             entries.put("caller", source.getTextName());
-            entries.put("dimension", level.dimension().location().toString());
+            entries.put("dimension", level.dimension().identifier().toString());
             entries.put("seed", Long.toString(level.getSeed()));
             entries.put("timestamp", ISO.format(ZonedDateTime.now(ZoneOffset.UTC)));
         }
@@ -129,8 +129,8 @@ public final class ReportWriter {
         MutableComponent link = Component.literal(relative).withStyle(Style.EMPTY
                 .withColor(ChatFormatting.AQUA)
                 .withUnderlined(true)
-                .withClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, relative))
-                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Messages.REPORT_CLICK.get())));
+                .withClickEvent(new ClickEvent.CopyToClipboard(relative))
+                .withHoverEvent(new HoverEvent.ShowText(Messages.REPORT_CLICK.get())));
         return Messages.REPORT_WRITTEN.get(link);
     }
 

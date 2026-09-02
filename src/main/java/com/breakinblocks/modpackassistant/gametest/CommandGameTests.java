@@ -1,24 +1,20 @@
 package com.breakinblocks.modpackassistant.gametest;
 
-import com.breakinblocks.modpackassistant.ModpackAssistant;
 import com.breakinblocks.modpackassistant.data.TestLootPlacements;
 import com.breakinblocks.modpackassistant.jobs.RunScheduler;
 import com.breakinblocks.modpackassistant.report.ReportWriter;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
-import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.monster.Zombie;
-import net.minecraft.world.entity.vehicle.Minecart;
+import net.minecraft.world.entity.monster.zombie.Zombie;
+import net.minecraft.world.entity.vehicle.minecart.Minecart;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -26,10 +22,10 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Stream;
 
-@GameTestHolder(ModpackAssistant.MOD_ID)
-@PrefixGameTestTemplate(false)
 public final class CommandGameTests {
-    private static final String EMPTY = CoreGameTests.EMPTY;
+    private CommandGameTests() {
+    }
+
     private static final int RUN_WAIT = 40;
 
     private static CommandSourceStack sourceAt(GameTestHelper helper, BlockPos relative) {
@@ -52,7 +48,6 @@ public final class CommandGameTests {
         }
     }
 
-    @GameTest(batch = "command_clearRemovePredicate", template = EMPTY, timeoutTicks = 200)
     public static void clearRemovePredicateProtectsBedrock(GameTestHelper helper) {
         requireIdle(helper);
         helper.setBlock(new BlockPos(4, 1, 2), Blocks.BEDROCK);
@@ -76,7 +71,6 @@ public final class CommandGameTests {
         });
     }
 
-    @GameTest(batch = "command_clearKeepOres", template = EMPTY, timeoutTicks = 200)
     public static void clearKeepOresAndModdedLeavesOres(GameTestHelper helper) {
         requireIdle(helper);
         helper.setBlock(new BlockPos(4, 1, 2), Blocks.IRON_ORE);
@@ -90,7 +84,6 @@ public final class CommandGameTests {
         });
     }
 
-    @GameTest(batch = "command_drain", template = EMPTY, timeoutTicks = 200)
     public static void drainRemovesConnectedFluidWithinRadius(GameTestHelper helper) {
         requireIdle(helper);
         helper.setBlock(new BlockPos(1, 1, 1), Blocks.WATER);
@@ -109,7 +102,6 @@ public final class CommandGameTests {
         });
     }
 
-    @GameTest(batch = "command_killAll", template = EMPTY, timeoutTicks = 100)
     public static void killAllSkipsProtectedAndPlayers(GameTestHelper helper) {
         Zombie zombie = helper.spawn(EntityType.ZOMBIE, new BlockPos(4, 1, 4));
         Minecart cart = helper.spawn(EntityType.MINECART, new BlockPos(6, 1, 4));
@@ -126,11 +118,10 @@ public final class CommandGameTests {
         });
     }
 
-    @GameTest(batch = "command_tpd", template = EMPTY, timeoutTicks = 200000)
     public static void tpdMovesVehicleWithPassenger(GameTestHelper helper) {
         Minecart cart = helper.spawn(EntityType.MINECART, new BlockPos(4, 1, 4));
         Zombie zombie = helper.spawn(EntityType.ZOMBIE, new BlockPos(4, 1, 4));
-        zombie.startRiding(cart, true);
+        zombie.startRiding(cart, true, true);
         helper.assertTrue(zombie.isPassenger(), "zombie should be riding the minecart");
         ServerLevel nether = helper.getLevel().getServer().getLevel(Level.NETHER);
         helper.assertTrue(nether != null, "nether should exist");
@@ -139,7 +130,7 @@ public final class CommandGameTests {
         nether.setChunkForced(origin.getX() >> 4, origin.getZ() >> 4, true);
         CoreGameTests.run(helper, CoreGameTests.source(player), "ma tpd minecraft:the_nether @e[type=minecraft:minecart,distance=..10]");
         helper.assertTrue(cart.isRemoved(), "original minecart should have been removed from the overworld");
-        AABB column = new AABB(origin.getX() - 4, nether.getMinBuildHeight(), origin.getZ() - 4, origin.getX() + 4, nether.getMaxBuildHeight(), origin.getZ() + 4);
+        AABB column = new AABB(origin.getX() - 4, nether.getMinY(), origin.getZ() - 4, origin.getX() + 4, nether.getMaxY() + 1, origin.getZ() + 4);
         helper.succeedWhen(() -> {
             helper.assertTrue(nether.isPositionEntityTicking(origin), "waiting for the nether chunk to become entity ticking");
             List<Minecart> carts = nether.getEntitiesOfClass(Minecart.class, column);
@@ -152,7 +143,6 @@ public final class CommandGameTests {
         });
     }
 
-    @GameTest(batch = "command_scanOresReport", template = EMPTY, timeoutTicks = 200)
     public static void scanOresWritesReport(GameTestHelper helper) {
         requireIdle(helper);
         helper.setBlock(new BlockPos(2, 1, 2), Blocks.GOLD_ORE);
@@ -166,7 +156,6 @@ public final class CommandGameTests {
         });
     }
 
-    @GameTest(batch = "command_radiusLimit", template = EMPTY, timeoutTicks = 100)
     public static void radiusAboveLimitIsRefused(GameTestHelper helper) {
         requireIdle(helper);
         CommandSourceStack source = sourceAt(helper, new BlockPos(8, 1, 8));
@@ -179,7 +168,6 @@ public final class CommandGameTests {
         });
     }
 
-    @GameTest(batch = "command_alias", template = EMPTY, timeoutTicks = 100)
     public static void aliasAndLowercaseLiteralsWork(GameTestHelper helper) {
         requireIdle(helper);
         var dispatcher = helper.getLevel().getServer().getCommands().getDispatcher();
@@ -191,7 +179,6 @@ public final class CommandGameTests {
         helper.succeed();
     }
 
-    @GameTest(batch = "command_structureLoot", template = EMPTY, timeoutTicks = 200)
     public static void structureLootPlacesAndClears(GameTestHelper helper) {
         TestLootPlacements record = TestLootPlacements.get(helper.getLevel().getServer());
         record.clear();

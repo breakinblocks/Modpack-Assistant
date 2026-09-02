@@ -16,7 +16,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.border.WorldBorder;
 import net.minecraft.world.level.levelgen.Heightmap;
-import net.minecraft.world.level.portal.DimensionTransition;
+import net.minecraft.world.level.portal.TeleportTransition;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -58,9 +58,9 @@ public final class TpdCommand {
                 progress = player.experienceProgress;
             }
 
-            Entity result = entity.changeDimension(new DimensionTransition(destination, Vec3.atBottomCenterOf(pos), Vec3.ZERO, entity.getYRot(), entity.getXRot(), DimensionTransition.DO_NOTHING));
+            Entity result = entity.teleport(new TeleportTransition(destination, Vec3.atBottomCenterOf(pos), Vec3.ZERO, entity.getYRot(), entity.getXRot(), TeleportTransition.DO_NOTHING));
             if (result == null) {
-                source.sendFailure(Messages.TPD_ENTITY_FAILED.get(entity.getDisplayName(), destination.dimension().location()));
+                source.sendFailure(Messages.TPD_ENTITY_FAILED.get(entity.getDisplayName(), destination.dimension().identifier()));
                 continue;
             }
             if (result instanceof ServerPlayer player) {
@@ -69,7 +69,7 @@ public final class TpdCommand {
             }
             moved++;
         }
-        return CommandResults.success(source, Messages.TPD_DONE.get(moved, destination.dimension().location()), moved);
+        return CommandResults.success(source, Messages.TPD_DONE.get(moved, destination.dimension().identifier()), moved);
     }
 
     private static BlockPos arrivalPosition(ServerLevel destination, Entity entity) {
@@ -79,7 +79,7 @@ public final class TpdCommand {
             pos = new BlockPos((int) border.getCenterX(), 0, (int) border.getCenterZ());
             return destination.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING, pos);
         }
-        if (pos.getY() < destination.getMinBuildHeight() || pos.getY() >= destination.getMaxBuildHeight()) {
+        if (!destination.isInsideBuildHeight(pos.getY())) {
             return destination.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING, pos);
         }
         return pos;
