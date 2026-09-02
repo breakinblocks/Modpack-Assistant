@@ -3,13 +3,17 @@ plugins {
     id 'idea'
     id 'maven-publish'
     id 'net.neoforged.moddev' version '2.0.140'
+    id 'me.modmuss50.mod-publish-plugin' version '1.1.0'
 }
 
 tasks.named('wrapper', Wrapper).configure {
     distributionType = Wrapper.DistributionType.BIN
 }
 
-version = "${minecraft_version}-${mod_version}"
+def snapshotEnv = providers.environmentVariable("SNAPSHOT")
+def isSnapshot = snapshotEnv.isPresent() && snapshotEnv.get().toBoolean()
+
+version = "${minecraft_version}-${mod_version}${isSnapshot ? "-SNAPSHOT" : ""}"
 group = mod_group
 
 base {
@@ -155,7 +159,7 @@ publishing {
     repositories {
         maven {
             name = "BreakInBlocks"
-            url = version.toString().endsWith("-SNAPSHOT") ?
+            url = isSnapshot ?
                     "https://maven.breakinblocks.com/snapshots" :
                     "https://maven.breakinblocks.com/releases"
             credentials {
@@ -164,6 +168,42 @@ publishing {
             }
         }
     }
+}
+
+publishMods {
+    dryRun = providers.environmentVariable("CURSEFORGE_TOKEN").getOrNull() == null
+    file = jar.archiveFile
+    changelog = file("CHANGELOG.md").text
+    version = project.version
+    type = isSnapshot ? BETA : STABLE
+    modLoaders.add("neoforge")
+    displayName = "[${minecraft_version}] ${mod_name} ${mod_version}"
+
+    curseforge {
+        projectId = "1679492"
+        projectSlug = "modpack-assistant"
+        accessToken = providers.environmentVariable("CURSEFORGE_TOKEN")
+        minecraftVersions.add(minecraft_version)
+        javaVersions.add(JavaVersion.VERSION_21)
+        clientRequired = false
+        serverRequired = true
+    }
+}
+
+tasks.register('publishMaven') {
+    description = 'Publishes the mod JAR and sources JAR to the BreakInBlocks Maven repository.'
+    group = 'publishing'
+    dependsOn 'publishMavenJavaPublicationToBreakInBlocksRepository'
+}
+
+tasks.register('publishMod') {
+    description = 'Publishes the mod to CurseForge and the BreakInBlocks Maven repository.'
+    group = 'publishing'
+    dependsOn 'publishMods', 'publishMaven'
+}
+
+tasks.named('publishMods') {
+    finalizedBy 'publishMaven'
 }
 
 idea {
