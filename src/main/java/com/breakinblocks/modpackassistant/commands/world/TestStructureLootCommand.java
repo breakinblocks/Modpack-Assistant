@@ -13,7 +13,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
-import net.minecraft.commands.arguments.ResourceArgument;
+import net.minecraft.commands.arguments.ResourceKeyArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
@@ -47,7 +47,7 @@ public final class TestStructureLootCommand {
                 .requires(MAPermissions.GAMEMASTER)
                 .then(Commands.literal("clear")
                         .executes(context -> clear(context.getSource())))
-                .then(Commands.argument("structure", ResourceArgument.resource(buildContext, Registries.STRUCTURE))
+                .then(Commands.argument("structure", ResourceKeyArgument.key(Registries.STRUCTURE))
                         .executes(context -> place(context, 1))
                         .then(Commands.argument("samples", IntegerArgumentType.integer(1, MAX_SAMPLES))
                                 .executes(context -> place(context, IntegerArgumentType.getInteger(context, "samples")))));
@@ -57,7 +57,7 @@ public final class TestStructureLootCommand {
         CommandSourceStack source = context.getSource();
         ServerPlayer player = CommandResults.player(source);
         ServerLevel level = source.getLevel();
-        Holder.Reference<Structure> structure = ResourceArgument.getStructure(context, "structure");
+        Holder.Reference<Structure> structure = ResourceKeyArgument.getStructure(context, "structure");
 
         TestLootPlacements record = TestLootPlacements.get(level.getServer());
         if (!record.isEmpty()) {
