@@ -69,7 +69,7 @@ public final class BlockLocator {
     }
 
     public String csv(ReportWriter.Context context) {
-        CsvWriter csv = new CsvWriter().comments(context.commentLines());
+        CsvWriter csv = new CsvWriter().comments(context.headerLines());
         csv.row("x", "y", "z", "distance");
         for (Hit hit : nearest()) {
             csv.row(hit.pos().getX(), hit.pos().getY(), hit.pos().getZ(), Math.round(hit.distance() * 10D) / 10D);
