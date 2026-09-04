@@ -91,6 +91,11 @@ public final class Messages {
     public static final Msg SCAN_HEADER = msg("scan.header", "Ore distribution for %s, Y %s to %s (total: %s)");
     public static final Msg SCAN_START = msg("scan.start", "Scanning ores across %s (%s chunks), Y %s to %s");
     public static final Msg SCAN_PERCENT = msg("scan.percent", "%s%%");
+    public static final Msg LOCATE_START = msg("locate.start", "Looking for %s across %s (%s chunks)");
+    public static final Msg LOCATE_NONE = msg("locate.none", "No %s found across %s");
+    public static final Msg LOCATE_HEADER = msg("locate.header", "Found %s %s across %s, nearest first");
+    public static final Msg LOCATE_DISTANCE = msg("locate.distance", "  %s blocks away");
+    public static final Msg LOCATE_TELEPORT = msg("locate.teleport", "Click to teleport");
 
     public static final Msg MINE_START = msg("mine.start", "Simulating %s mining across %s (%s chunks)");
     public static final Msg MINE_HEADER = msg("mine.header", "Simulated yield for %s (total: %s items)");

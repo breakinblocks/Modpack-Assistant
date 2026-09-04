@@ -42,6 +42,7 @@ Analysis and reports, all read-only, each writing a file under `logs/modpackassi
 | Command | Purpose |
 |---|---|
 | `/ma scanOres <chunk_radius> [min_y] [max_y]` | Ore distribution by block and by height |
+| `/ma locateBlock <block> <chunk_radius>` | Every placement of one block in a region, nearest first with click-to-teleport coordinates |
 | `/ma simulateLoot <iterations> <loot_table> [luck]` | Drop statistics for a loot table |
 | `/ma simulateSpawns <biome> <dimension> <ticks>` | Estimated natural spawning without placing entities |
 | `/ma findConflicts [type]` | Recipes that consume the same inputs |

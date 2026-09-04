@@ -41,6 +41,7 @@ public final class ReportWriter {
         SPAWNS("spawns"),
         TAGS("tags"),
         BIOMES("biomes"),
+        BLOCKS("blocks"),
         REGISTRY("registry");
 
         private final String directory;

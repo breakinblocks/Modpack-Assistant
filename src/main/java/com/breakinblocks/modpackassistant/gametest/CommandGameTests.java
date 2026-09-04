@@ -1,6 +1,7 @@
 package com.breakinblocks.modpackassistant.gametest;
 
 import com.breakinblocks.modpackassistant.ModpackAssistant;
+import com.breakinblocks.modpackassistant.analysis.BlockLocator;
 import com.breakinblocks.modpackassistant.data.TestLootPlacements;
 import com.breakinblocks.modpackassistant.jobs.RunScheduler;
 import com.breakinblocks.modpackassistant.report.ReportWriter;
@@ -14,6 +15,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.vehicle.Minecart;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
@@ -162,6 +164,34 @@ public final class CommandGameTests {
         helper.runAfterDelay(RUN_WAIT, () -> {
             long after = countReports(ReportWriter.Family.ORES);
             helper.assertTrue(after >= before + 2, "expected two new ore reports, before " + before + " after " + after);
+            helper.succeed();
+        });
+    }
+
+    @GameTest(batch = "command_locateBlock", template = EMPTY, timeoutTicks = 200)
+    public static void locateBlockListsNearestFirstAndWritesReport(GameTestHelper helper) {
+        requireIdle(helper);
+        BlockPos near = helper.absolutePos(new BlockPos(6, 1, 6));
+        BlockPos far = helper.absolutePos(new BlockPos(1, 5, 1));
+        helper.setBlock(new BlockPos(6, 1, 6), Blocks.BUDDING_AMETHYST);
+        helper.setBlock(new BlockPos(1, 5, 1), Blocks.BUDDING_AMETHYST);
+        long before = countReports(ReportWriter.Family.BLOCKS);
+        CommandSourceStack source = sourceAt(helper, new BlockPos(8, 1, 8));
+
+        BlockLocator locator = new BlockLocator(Blocks.BUDDING_AMETHYST, source.getPosition());
+        ChunkPos chunk = new ChunkPos(near);
+        locator.scanChunk(helper.getLevel().getChunk(chunk.x, chunk.z), chunk);
+        ChunkPos farChunk = new ChunkPos(far);
+        if (!farChunk.equals(chunk)) {
+            locator.scanChunk(helper.getLevel().getChunk(farChunk.x, farChunk.z), farChunk);
+        }
+        helper.assertTrue(locator.total() == 2, "expected the two placed blocks, found " + locator.total());
+        helper.assertTrue(locator.nearest().get(0).pos().equals(near), "nearest hit should be " + near + " but was " + locator.nearest().get(0).pos());
+
+        CoreGameTests.run(helper, source, "ma locateBlock minecraft:budding_amethyst 0");
+        helper.runAfterDelay(RUN_WAIT, () -> {
+            long after = countReports(ReportWriter.Family.BLOCKS);
+            helper.assertTrue(after >= before + 1, "expected a new block report, before " + before + " after " + after);
             helper.succeed();
         });
     }
