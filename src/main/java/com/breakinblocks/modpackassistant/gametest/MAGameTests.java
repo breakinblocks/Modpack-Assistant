@@ -49,6 +49,7 @@ public final class MAGameTests {
         register(event, "kill_all_skips_protected_and_players", CommandGameTests::killAllSkipsProtectedAndPlayers, 100);
         register(event, "tpd_moves_vehicle_with_passenger", CommandGameTests::tpdMovesVehicleWithPassenger, 200000);
         register(event, "scan_ores_writes_report", CommandGameTests::scanOresWritesReport, 200);
+        register(event, "locate_block_lists_nearest_first_and_writes_report", CommandGameTests::locateBlockListsNearestFirstAndWritesReport, 200);
         register(event, "radius_above_limit_is_refused", CommandGameTests::radiusAboveLimitIsRefused, 100);
         register(event, "alias_and_lowercase_literals_work", CommandGameTests::aliasAndLowercaseLiteralsWork, 100);
         register(event, "structure_loot_places_and_clears", CommandGameTests::structureLootPlacesAndClears, 200);

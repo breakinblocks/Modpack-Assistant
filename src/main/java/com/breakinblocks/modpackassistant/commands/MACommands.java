@@ -17,6 +17,7 @@ import com.breakinblocks.modpackassistant.commands.analysis.AuditUnificationComm
 import com.breakinblocks.modpackassistant.commands.analysis.ExportTagsCommand;
 import com.breakinblocks.modpackassistant.commands.analysis.FindConflictsCommand;
 import com.breakinblocks.modpackassistant.commands.analysis.FindUncraftablesCommand;
+import com.breakinblocks.modpackassistant.commands.analysis.LocateBlockCommand;
 import com.breakinblocks.modpackassistant.commands.analysis.MapBiomesCommand;
 import com.breakinblocks.modpackassistant.commands.analysis.ScanOresCommand;
 import com.breakinblocks.modpackassistant.commands.analysis.SimulateLootCommand;
@@ -61,6 +62,7 @@ public final class MACommands {
             context -> CopyCommand.build(),
             context -> ScanOresCommand.build("scanOres"),
             context -> ScanOresCommand.build("oredist"),
+            LocateBlockCommand::build,
             ClearCommand::build,
             context -> DrainCommand.build(),
             KillCommand::build,

@@ -14,6 +14,23 @@ def snapshotEnv = providers.environmentVariable("SNAPSHOT")
 def isSnapshot = snapshotEnv.isPresent() && snapshotEnv.get().toBoolean()
 
 version = "${minecraft_version}-${mod_version}${isSnapshot ? "-SNAPSHOT" : ""}"
+
+def latestChangelog() {
+    def lines = file("CHANGELOG.md").readLines()
+    def body = []
+    def started = false
+    for (line in lines) {
+        if (line.startsWith("## ")) {
+            if (started) break
+            started = true
+            continue
+        }
+        if (started) body << line
+    }
+    def section = body.join("\n").trim()
+    return section.isEmpty() ? file("CHANGELOG.md").text.trim() : section
+}
+
 group = mod_group
 
 base {
@@ -157,7 +174,7 @@ publishing {
 publishMods {
     dryRun = providers.environmentVariable("CURSEFORGE_TOKEN").getOrNull() == null
     file = jar.archiveFile
-    changelog = file("CHANGELOG.md").text
+    changelog = latestChangelog()
     version = project.version
     type = isSnapshot ? BETA : STABLE
     modLoaders.add("neoforge")
