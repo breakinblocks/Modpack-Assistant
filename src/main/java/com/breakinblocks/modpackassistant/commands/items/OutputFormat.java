@@ -83,7 +83,7 @@ public enum OutputFormat {
 
     private static String plain(List<ItemStack> items, HolderLookup.Provider lookup) {
         return items.stream()
-                .map(stack -> stack.getCount() + " " + ItemStrings.giveString(stack, lookup))
+                .map(stack -> ItemStrings.countedGiveString(stack, lookup))
                 .collect(Collectors.joining("\n"));
     }
 

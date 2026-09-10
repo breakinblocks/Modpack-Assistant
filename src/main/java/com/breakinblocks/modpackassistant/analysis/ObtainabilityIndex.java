@@ -30,6 +30,9 @@ import net.minecraft.world.level.storage.loot.LootTable;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.Collections;
+import java.util.ArrayDeque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -49,11 +52,26 @@ public final class ObtainabilityIndex {
     private final Map<String, List<Item>> creativeOnly = new TreeMap<>();
     private int uncraftableCount;
     private int creativeOnlyCount;
+    private final Iterator<RecipeHolder<?>> recipes;
+    private final Iterator<VillagerTrade> trades;
+    private final Iterator<Holder.Reference<Item>> items = BuiltInRegistries.ITEM.listElements().iterator();
+    private final ArrayDeque<Iterator<JsonElement>> lootNodes = new ArrayDeque<>();
+    private Iterator<ItemStack> creativeItems = Collections.emptyIterator();
+    private Iterator<CreativeModeTab> creativeTabs;
+    private int phase;
+    private int lootIndex;
+    private int recipesRead;
+    private int recipesSkipped;
+    private int tradesRead;
+    private int tradesSkipped;
+    private int lootSkipped;
 
     public ObtainabilityIndex(ServerLevel level) {
         this.level = level;
         this.lootTableIds = level.getServer().reloadableRegistries().lookup()
                 .lookupOrThrow(Registries.LOOT_TABLE).listElementIds().toList();
+        recipes = level.getServer().getRecipeManager().getRecipes().iterator();
+        trades = level.registryAccess().lookupOrThrow(Registries.VILLAGER_TRADE).iterator();
     }
 
     public int lootTableCount() {
@@ -72,119 +90,145 @@ public final class ObtainabilityIndex {
         return uncraftable.size();
     }
 
-    public void indexRecipes() {
+    public boolean step(@Nullable String namespace, int budget) {
+        if (budget < 1) throw new IllegalArgumentException("budget must be positive");
         ContextMap displayContext = SlotDisplayContext.fromLevel(level);
-        var recipes = level.getServer().getRecipeManager().getRecipes();
-        for (RecipeHolder<?> holder : recipes) {
-            try {
-                for (RecipeDisplay display : holder.value().display()) {
-                    for (ItemStack result : display.result().resolveForStacks(displayContext)) {
-                        if (!result.isEmpty()) {
-                            fromRecipes.add(result.getItem());
+        DynamicOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, level.getServer().reloadableRegistries().lookup());
+        for (int i = 0; i < budget; i++) {
+            switch (phase) {
+                case 0 -> {
+                    if (!recipes.hasNext()) {
+                        checked.add("static recipe displays (" + recipesRead + " recipes)");
+                        if (recipesSkipped > 0) unchecked.add("recipes without readable static results (" + recipesSkipped + ")");
+                        phase++;
+                        continue;
+                    }
+                    RecipeHolder<?> holder = recipes.next();
+                    recipesRead++;
+                    boolean found = false;
+                    try {
+                        for (RecipeDisplay display : holder.value().display()) {
+                            for (ItemStack result : display.result().resolveForStacks(displayContext)) {
+                                if (!result.isEmpty()) {
+                                    fromRecipes.add(result.getItem());
+                                    found = true;
+                                }
+                            }
                         }
+                    } catch (RuntimeException error) {
+                        ModpackAssistant.LOGGER.debug("Recipe {} has no readable static result", holder.id().identifier(), error);
+                    }
+                    if (!found) recipesSkipped++;
+                }
+                case 1 -> {
+                    if (!lootNodes.isEmpty()) {
+                        Iterator<JsonElement> nodes = lootNodes.peek();
+                        if (!nodes.hasNext()) lootNodes.pop();
+                        else visitLootNode(nodes.next());
+                    } else if (lootIndex < lootTableIds.size()) {
+                        var id = lootTableIds.get(lootIndex++);
+                        try {
+                            LootTable table = level.getServer().reloadableRegistries().getLootTable(id);
+                            JsonElement encoded = LootTable.DIRECT_CODEC.encodeStart(ops, table).result().orElse(null);
+                            if (encoded == null) lootSkipped++;
+                            else lootNodes.push(List.of(encoded).iterator());
+                        } catch (RuntimeException error) {
+                            lootSkipped++;
+                            ModpackAssistant.LOGGER.debug("Could not inspect loot table {}", id.identifier(), error);
+                        }
+                        return false;
+                    } else {
+                        checked.add("loot tables (" + lootTableIds.size() + " tables, item and tag entries)");
+                        if (lootSkipped > 0) unchecked.add("unreadable loot tables (" + lootSkipped + ")");
+                        phase++;
                     }
                 }
-            } catch (Exception e) {
-                ModpackAssistant.LOGGER.debug("Recipe {} has no static result", holder.id().identifier());
+                case 2 -> {
+                    if (!trades.hasNext()) {
+                        checked.add("registered villager trades (" + tradesRead + " listings; availability conditions not evaluated)");
+                        if (tradesSkipped > 0) unchecked.add("unreadable villager trade outputs (" + tradesSkipped + ")");
+                        phase++;
+                        continue;
+                    }
+                    tradesRead++;
+                    try {
+                        JsonElement encoded = VillagerTrade.CODEC.encodeStart(ops, trades.next()).result().orElse(null);
+                        if (encoded == null || !encoded.isJsonObject() || !collectGiven(encoded.getAsJsonObject().get("gives"))) tradesSkipped++;
+                    } catch (RuntimeException error) {
+                        tradesSkipped++;
+                        ModpackAssistant.LOGGER.debug("Could not inspect villager trade output", error);
+                    }
+                }
+                case 3 -> {
+                    if (creativeTabs == null) {
+                        try {
+                            CreativeModeTabs.tryRebuildTabContents(level.enabledFeatures(), true, level.registryAccess());
+                            creativeTabs = CreativeModeTabs.allTabs().iterator();
+                        } catch (RuntimeException error) {
+                            unchecked.add("creative tab contents (" + error.getMessage() + ")");
+                            creativeTabs = Collections.emptyIterator();
+                        }
+                        return false;
+                    }
+                    if (creativeItems.hasNext()) fromCreative.add(creativeItems.next().getItem());
+                    else if (creativeTabs.hasNext()) creativeItems = creativeTabs.next().getDisplayItems().iterator();
+                    else {
+                        checked.add("available creative tab contents");
+                        phase++;
+                    }
+                }
+                case 4 -> {
+                    if (!items.hasNext()) {
+                        phase++;
+                        return true;
+                    }
+                    Holder.Reference<Item> holder = items.next();
+                    Item item = holder.value();
+                    Identifier id = holder.key().identifier();
+                    if (item == Items.AIR || (namespace != null && !id.getNamespace().equals(namespace))
+                            || fromRecipes.contains(item) || fromLoot.contains(item) || fromTrades.contains(item)) continue;
+                    if (fromCreative.contains(item)) {
+                        creativeOnly.computeIfAbsent(id.getNamespace(), ignored -> new ArrayList<>()).add(item);
+                        creativeOnlyCount++;
+                    } else {
+                        uncraftable.computeIfAbsent(id.getNamespace(), ignored -> new ArrayList<>()).add(item);
+                        uncraftableCount++;
+                    }
+                }
+                default -> { return true; }
             }
         }
-        checked.add("recipe results (" + recipes.size() + " recipes)");
+        return false;
     }
 
-    public void indexLootTables(int from, int to) {
-        DynamicOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, level.registryAccess());
-        for (int i = from; i < Math.min(to, lootTableIds.size()); i++) {
-            LootTable table = level.getServer().reloadableRegistries().getLootTable(lootTableIds.get(i));
-            LootTable.DIRECT_CODEC.encodeStart(ops, table).result().ifPresent(this::walkLootJson);
-        }
-        if (to >= lootTableIds.size()) {
-            checked.add("loot tables (" + lootTableIds.size() + " tables, item and tag entries)");
-        }
-    }
-
-    private void walkLootJson(JsonElement element) {
+    private void visitLootNode(JsonElement element) {
         if (element.isJsonObject()) {
             JsonObject object = element.getAsJsonObject();
-            if (object.has("type") && object.has("name")) {
-                String type = object.get("type").getAsString();
-                String name = object.get("name").getAsString();
-                if (type.equals("minecraft:item") || type.equals("item")) {
-                    BuiltInRegistries.ITEM.getOptional(Identifier.parse(name)).ifPresent(fromLoot::add);
-                } else if (type.equals("minecraft:tag") || type.equals("tag")) {
-                    TagKey<Item> tag = TagKey.create(Registries.ITEM, Identifier.parse(name));
-                    BuiltInRegistries.ITEM.get(tag).ifPresent(set -> set.forEach(holder -> fromLoot.add(holder.value())));
+            JsonElement type = object.get("type");
+            JsonElement name = object.get("name");
+            if (type != null && type.isJsonPrimitive() && name != null && name.isJsonPrimitive()) {
+                Identifier id = Identifier.tryParse(name.getAsString());
+                if (id != null) {
+                    switch (type.getAsString()) {
+                        case "minecraft:item", "item" -> BuiltInRegistries.ITEM.getOptional(id).ifPresent(fromLoot::add);
+                        case "minecraft:tag", "tag" -> BuiltInRegistries.ITEM.get(TagKey.create(Registries.ITEM, id))
+                                .ifPresent(set -> set.forEach(holder -> fromLoot.add(holder.value())));
+                    }
                 }
             }
-            object.entrySet().forEach(entry -> walkLootJson(entry.getValue()));
+            lootNodes.push(object.asMap().values().iterator());
         } else if (element.isJsonArray()) {
-            element.getAsJsonArray().forEach(this::walkLootJson);
+            lootNodes.push(element.getAsJsonArray().iterator());
         }
     }
 
-    public void indexTrades() {
-        Registry<VillagerTrade> trades = level.registryAccess().lookupOrThrow(Registries.VILLAGER_TRADE);
-        DynamicOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, level.registryAccess());
-        int listings = 0;
-        int unreadable = 0;
-        for (VillagerTrade trade : trades) {
-            JsonElement encoded = VillagerTrade.CODEC.encodeStart(ops, trade).result().orElse(null);
-            if (encoded == null || !encoded.isJsonObject()) {
-                unreadable++;
-                continue;
-            }
-            listings++;
-            collectGiven(encoded.getAsJsonObject().get("gives"));
-        }
-        checked.add("villager and wandering trader trades (" + listings + " listings from the villager_trade registry)");
-        if (unreadable > 0) {
-            unchecked.add("villager trades that could not be encoded (" + unreadable + " listings)");
-        }
-    }
-
-    private void collectGiven(@Nullable JsonElement gives) {
-        if (gives == null) {
-            return;
-        }
-        if (gives.isJsonPrimitive()) {
-            BuiltInRegistries.ITEM.getOptional(Identifier.parse(gives.getAsString())).ifPresent(fromTrades::add);
-        } else if (gives.isJsonObject() && gives.getAsJsonObject().has("id")) {
-            BuiltInRegistries.ITEM.getOptional(Identifier.parse(gives.getAsJsonObject().get("id").getAsString())).ifPresent(fromTrades::add);
-        }
-    }
-
-    public void indexCreativeTabs() {
-        try {
-            CreativeModeTabs.tryRebuildTabContents(level.enabledFeatures(), true, level.registryAccess());
-            for (CreativeModeTab tab : CreativeModeTabs.allTabs()) {
-                for (ItemStack stack : tab.getDisplayItems()) {
-                    fromCreative.add(stack.getItem());
-                }
-            }
-            checked.add("creative tab contents (" + CreativeModeTabs.allTabs().size() + " tabs)");
-        } catch (Exception e) {
-            ModpackAssistant.LOGGER.warn("Creative tab contents could not be built on this server", e);
-            unchecked.add("creative tab contents (" + e.getMessage() + ")");
-        }
-    }
-
-    public void finish(@Nullable String namespace) {
-        for (Holder.Reference<Item> holder : BuiltInRegistries.ITEM.listElements().toList()) {
-            Item item = holder.value();
-            Identifier id = holder.key().identifier();
-            if (item == Items.AIR || (namespace != null && !id.getNamespace().equals(namespace))) {
-                continue;
-            }
-            if (fromRecipes.contains(item) || fromLoot.contains(item) || fromTrades.contains(item)) {
-                continue;
-            }
-            if (fromCreative.contains(item)) {
-                creativeOnly.computeIfAbsent(id.getNamespace(), ignored -> new ArrayList<>()).add(item);
-                creativeOnlyCount++;
-            } else {
-                uncraftable.computeIfAbsent(id.getNamespace(), ignored -> new ArrayList<>()).add(item);
-                uncraftableCount++;
-            }
-        }
+    private boolean collectGiven(@Nullable JsonElement gives) {
+        if (gives == null) return false;
+        JsonElement idElement = gives.isJsonObject() ? gives.getAsJsonObject().get("id") : gives;
+        if (idElement == null || !idElement.isJsonPrimitive()) return false;
+        Identifier id = Identifier.tryParse(idElement.getAsString());
+        if (id == null) return false;
+        return BuiltInRegistries.ITEM.getOptional(id).map(fromTrades::add).isPresent();
     }
 
     public String log(ReportWriter.Context context) {

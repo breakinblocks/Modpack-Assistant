@@ -16,8 +16,6 @@ import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 
 public final class FindUncraftablesCommand {
-    private static final int LOOT_BATCH = 200;
-
     private FindUncraftablesCommand() {
     }
 
@@ -37,14 +35,7 @@ public final class FindUncraftablesCommand {
                 .note("namespace_filter", namespace == null ? "all" : namespace);
 
         Run run = new Run(source, "uncraftable item report", source.getLevel().dimension());
-        run.job(index::indexRecipes);
-        for (int from = 0; from < index.lootTableCount(); from += LOOT_BATCH) {
-            int start = from;
-            run.job(() -> index.indexLootTables(start, start + LOOT_BATCH));
-        }
-        run.job(index::indexTrades);
-        run.job(index::indexCreativeTabs);
-        run.job(() -> index.finish(namespace));
+        run.repeat(() -> index.step(namespace, 128));
         run.onComplete(finished -> {
             finished.message(Messages.UNCRAFT_DONE.get(index.uncraftableCount(), index.modCount(), index.creativeOnlyCount()));
             ReportWriter.deliver(finished, ReportWriter.Family.REGISTRY, "uncraftables", "log", index.log(context));

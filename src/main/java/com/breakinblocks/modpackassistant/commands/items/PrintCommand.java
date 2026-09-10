@@ -1,5 +1,6 @@
 package com.breakinblocks.modpackassistant.commands.items;
 
+import com.breakinblocks.modpackassistant.net.SetClipboardPayload;
 import com.breakinblocks.modpackassistant.commands.CommandResults;
 import com.breakinblocks.modpackassistant.commands.MAPermissions;
 import com.breakinblocks.modpackassistant.net.MANetworking;
@@ -49,6 +50,13 @@ public final class PrintCommand {
         List<ItemStack> items = itemSource.collect(player);
         if (items.isEmpty()) {
             return CommandResults.fail(source, Messages.NO_ITEM.get(player.getName()));
+        }
+
+        for (ItemStack stack : items) {
+            int length = ItemStrings.countedGiveString(stack, lookup).length();
+            if (length > SetClipboardPayload.MAX_TEXT_LENGTH) {
+                return CommandResults.fail(source, Messages.CLIPBOARD_TOO_LARGE.get(length, SetClipboardPayload.MAX_TEXT_LENGTH));
+            }
         }
 
         for (ItemStack stack : items) {

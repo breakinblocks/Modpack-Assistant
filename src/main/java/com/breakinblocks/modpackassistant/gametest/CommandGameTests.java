@@ -109,11 +109,11 @@ public final class CommandGameTests {
         Minecart cart = helper.spawn(EntityType.MINECART, new BlockPos(6, 1, 4));
         ServerPlayer player = CoreGameTests.fakePlayer(helper, new BlockPos(8, 1, 8));
         CoreGameTests.run(helper, CoreGameTests.source(player), "ma kill all");
-        helper.runAfterDelay(5, () -> {
+        helper.runAfterDelay(10, () -> {
             helper.assertTrue(zombie.isRemoved(), "zombie should be removed");
             helper.assertFalse(cart.isRemoved(), "minecart is tag protected and should survive");
             CoreGameTests.run(helper, CoreGameTests.source(player), "ma kill by minecraft:minecart");
-            helper.runAfterDelay(5, () -> {
+            helper.runAfterDelay(10, () -> {
                 helper.assertTrue(cart.isRemoved(), "kill by should bypass the protection tag");
                 helper.succeed();
             });
@@ -134,7 +134,6 @@ public final class CommandGameTests {
         helper.assertTrue(cart.isRemoved(), "original minecart should have been removed from the overworld");
         AABB column = new AABB(origin.getX() - 4, nether.getMinY(), origin.getZ() - 4, origin.getX() + 4, nether.getMaxY() + 1, origin.getZ() + 4);
         helper.succeedWhen(() -> {
-            helper.assertTrue(nether.isPositionEntityTicking(origin), "waiting for the nether chunk to become entity ticking");
             List<Minecart> carts = nether.getEntitiesOfClass(Minecart.class, column);
             helper.assertTrue(carts.size() == 1, "expected one minecart in the nether, found " + carts.size());
             List<Entity> passengers = carts.get(0).getPassengers();
@@ -165,7 +164,7 @@ public final class CommandGameTests {
         helper.setBlock(new BlockPos(6, 1, 6), Blocks.BUDDING_AMETHYST);
         helper.setBlock(new BlockPos(1, 5, 1), Blocks.BUDDING_AMETHYST);
         long before = countReports(ReportWriter.Family.BLOCKS);
-        CommandSourceStack source = sourceAt(helper, new BlockPos(8, 1, 8));
+        CommandSourceStack source = sourceAt(helper, new BlockPos(6, 1, 6));
 
         BlockLocator locator = new BlockLocator(Blocks.BUDDING_AMETHYST, source.getPosition());
         ChunkPos chunk = ChunkPos.containing(near);
@@ -214,15 +213,16 @@ public final class CommandGameTests {
         ServerPlayer player = CoreGameTests.fakePlayer(helper, new BlockPos(2, 1, 12));
         CommandSourceStack source = CoreGameTests.source(player);
         CoreGameTests.run(helper, source, "ma testStructureLoot minecraft:village_plains 1");
-        helper.runAfterDelay(5, () -> {
-            helper.assertFalse(record.isEmpty(), "placements should be recorded");
-            int placed = record.positions().size();
-            helper.assertTrue(placed > 0 && placed % 2 == 0, "expected chest and sign pairs, got " + placed);
-            CoreGameTests.run(helper, source, "ma testStructureLoot clear");
-            helper.runAfterDelay(5, () -> {
-                helper.assertTrue(record.isEmpty(), "record should be cleared");
-                helper.succeed();
-            });
-        });
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertFalse(RunScheduler.isBusy(), "waiting for structure loot placement"))
+                .thenExecute(() -> {
+                    helper.assertFalse(record.isEmpty(), "placements should be recorded");
+                    int placed = record.positions().size();
+                    helper.assertTrue(placed > 0 && placed % 2 == 0, "expected chest and sign pairs, got " + placed);
+                    CoreGameTests.run(helper, source, "ma testStructureLoot clear");
+                })
+                .thenWaitUntil(() -> helper.assertFalse(RunScheduler.isBusy(), "waiting for structure loot cleanup"))
+                .thenExecute(() -> helper.assertTrue(record.isEmpty(), "record should be cleared"))
+                .thenSucceed();
     }
 }

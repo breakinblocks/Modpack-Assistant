@@ -40,16 +40,22 @@ public final class FindConflictsCommand {
         }
 
         RecipeConflictFinder finder = new RecipeConflictFinder(source.getLevel());
-        finder.prepare(source.getServer().getRecipeManager().getRecipes(), filter);
-        ReportWriter.Context context = new ReportWriter.Context(source, "/ma findConflicts" + (typeId == null ? "" : " " + typeId))
-                .note("recipe_count", finder.recipeCount())
-                .note("bucket_count", finder.buckets().size())
-                .note("skipped_dynamic", finder.skipped().size());
+        var recipes = source.getServer().getRecipeManager().getRecipes().iterator();
+        RecipeType<?> selectedType = filter;
+        ReportWriter.Context context = new ReportWriter.Context(source, "/ma findConflicts" + (typeId == null ? "" : " " + typeId));
 
         Run run = new Run(source, "recipe conflict scan", source.getLevel().dimension());
-        for (RecipeConflictFinder.Bucket bucket : finder.buckets()) {
-            run.job(() -> finder.process(bucket));
-        }
+        run.repeat(() -> {
+            for (int i = 0; i < 128 && recipes.hasNext(); i++) finder.addRecipe(recipes.next(), selectedType);
+            if (recipes.hasNext()) return false;
+            context.note("recipe_count", finder.recipeCount()).note("bucket_count", finder.buckets().size())
+                    .note("skipped_dynamic", finder.skipped().size());
+            for (RecipeConflictFinder.Bucket bucket : finder.buckets()) {
+                run.repeat(() -> finder.processBatch(bucket, 128));
+            }
+            run.message(Messages.CONFLICTS_START.get(finder.recipeCount(), finder.buckets().size()));
+            return true;
+        });
         run.onComplete(finished -> {
             finished.message(Messages.CONFLICTS_DONE.get(finder.conflictCount(), finder.duplicateCount(), finder.skipped().size()));
             ReportWriter.deliver(finished, ReportWriter.Family.RECIPES, "conflicts", "log", finder.log(context));
@@ -59,7 +65,6 @@ public final class FindConflictsCommand {
         if (!RunScheduler.tryStart(run)) {
             return 0;
         }
-        run.message(Messages.CONFLICTS_START.get(finder.recipeCount(), finder.buckets().size()));
         return Math.max(1, run.total());
     }
 }

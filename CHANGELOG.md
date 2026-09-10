@@ -1,5 +1,28 @@
 # Changelog
 
+## 26.1.2-1.0.3
+
+### Fixed
+
+- Fixed analysis scans generating terrain and bounded retained block-search results.
+- Fixed unsafe loot simulation functions, referenced resources, global modifiers, and excessive workloads.
+- Fixed vanilla-client command arguments, English message fallbacks, and argument-free lowercase aliases.
+- Corrected recipe matching for ingredient reassignment, mirrors, shaped/shapeless overlaps, and 26.1.2 empty-slot layouts.
+- Fixed unsupported recipe displays being misclassified or interrupting scans
+- Split recipe comparisons, entity removal, structure loot work, and registry reviews into cancellable scheduled batches.
+- Fixed oversized clipboard exports and omitted redundant single-item quantities in plain output.
+- Fixed unsafe teleport destinations and kept destination chunks active with temporary portal tickets.
+- Fixed mining output losing item components.
+- Fixed report filename collisions and prevented existing reports from being overwritten.
+- Fixed partial structure-loot placement and cleanup records being lost on cancellation or failure.
+- Fixed ore scans potentially accepting height bands entirely outside the dimension.
+- Fixed drain jobs removing replacement fluids that no longer matched the selected fluid.
+- Corrected obtainability reports to identify unreadable sources and qualify registered trade availability.
+
+### Added
+
+- Added regression tests
+
 ## 26.1.2-1.0.2
 
 ### Added

@@ -67,12 +67,14 @@ public final class LocateBlockCommand {
 
         Run run = new Run(source, "block search", level.dimension());
         for (ChunkPos chunk : region.chunks()) {
-            run.job(() -> ChunkAccessor.withChunk(level, chunk, loaded -> {
-                locator.scanChunk(loaded, chunk);
-                return null;
-            }));
+            run.job(() -> ChunkAccessor.withLoadedChunk(level, chunk, loaded -> locator.scanChunk(loaded, chunk)));
         }
         run.onComplete(finished -> {
+            int skipped = region.chunkCount() - locator.chunksScanned();
+            reportContext.note("chunks_scanned", locator.chunksScanned()).note("chunks_skipped_unloaded", skipped)
+                    .note("total_matches", locator.total()).note("retained_nearest_matches", locator.retained());
+            if (skipped > 0) finished.message(Messages.SCAN_SKIPPED.get(skipped));
+            if (locator.total() > locator.retained()) finished.message(Messages.LOCATE_LIMIT.get(locator.total(), locator.retained()));
             printChat(finished, locator, region);
             if (locator.total() > 0) {
                 ReportWriter.deliver(finished, ReportWriter.Family.BLOCKS, "locate-" + ReportWriter.sanitize(blockId), "csv", locator.csv(reportContext));
@@ -83,7 +85,7 @@ public final class LocateBlockCommand {
             return 0;
         }
         run.message(Messages.LOCATE_START.get(block.getName(), region.spanText(), region.chunkCount()));
-        RegionCommands.reportUnloaded(run, level, region);
+        run.message(Messages.SCAN_LOADED_ONLY.get());
         return run.total();
     }
 

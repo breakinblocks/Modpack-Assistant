@@ -71,7 +71,7 @@ public final class SimulateSpawnsCommand {
         for (int x = -SAMPLE_CHUNK_RADIUS; x <= SAMPLE_CHUNK_RADIUS; x++) {
             for (int z = -SAMPLE_CHUNK_RADIUS; z <= SAMPLE_CHUNK_RADIUS; z++) {
                 ChunkPos chunk = new ChunkPos(anchorChunk.x() + x, anchorChunk.z() + z);
-                if (!level.getChunkSource().hasChunk(chunk.x(), chunk.z())) {
+                if (level.getChunkSource().getChunkNow(chunk.x(), chunk.z()) == null) {
                     continue;
                 }
                 BlockPos surface = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING, chunk.getMiddleBlockPosition(0));
@@ -97,9 +97,10 @@ public final class SimulateSpawnsCommand {
                 .note("virtual_player", virtualPlayer);
 
         Run run = new Run(source, "spawn simulation", level.dimension());
-        for (int i = 0; i < simulator.jobCount(); i++) {
-            run.job(simulator::simulateBatch);
-        }
+        run.repeat(() -> {
+            simulator.simulateBatch();
+            return simulator.complete();
+        });
         run.onComplete(finished -> {
             finished.message(Messages.SPAWNS_HEADER.get(ticks, biomeId, simulator.totalIndividuals()).withStyle(ChatFormatting.GREEN));
             List<SpawnSimulator.TypeStat> ranked = simulator.rankedTypes();

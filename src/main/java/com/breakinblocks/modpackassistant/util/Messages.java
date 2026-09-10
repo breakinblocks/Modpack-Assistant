@@ -10,6 +10,32 @@ import java.util.Map;
 public final class Messages {
     private static final Map<String, String> ALL = new LinkedHashMap<>();
 
+    public static final Msg INVALID_ENUM = msg("failed.invalid_enum", "Unknown value '%s'. Valid values: %s");
+    public static final Msg SCAN_SKIPPED = msg("scan.skipped", "Skipped %s chunks that were not loaded when scanned");
+    public static final Msg SCAN_LOADED_ONLY = msg("scan.loaded_only", "Only currently loaded chunks will be scanned; terrain will not be generated");
+    public static final Msg LOCATE_LIMIT = msg("locate.limit", "Found %s matches; retained the nearest %s for the report (max_locate_results)");
+    public static final Msg CLIPBOARD_TOO_LARGE = msg("clipboard.too_large", "Output is %s characters; the clipboard limit is %s. Copy fewer items or a smaller source");
+    public static final Msg TPD_NO_SAFE_POSITION = msg("tpd.no_safe_position", "No safe supported arrival position found for %s; it was not moved");
+    public static final Msg TPD_NONE = msg("tpd.none", "No entities could be moved safely");
+    public static final Msg LOOT_UNSAFE = msg("loot.unsafe", "Cannot safely simulate %s: %s");
+    public static final Msg LOOT_RELOADED = msg("loot.reloaded", "Data packs changed during the run; start the simulation again");
+    public static final Msg STRUCTLOOT_LIMIT = msg("structloot.limit", "Structure loot test stopped at its %s chest budget; remaining output was not placed");
+    public static final Msg STRUCTLOOT_START = msg("structloot.start", "Resolving and sampling %s, with a maximum of %s chests");
+    public static final Msg STRUCTLOOT_COMPLEX = msg("structloot.complex", "Structure exceeds the resolution budget: %s pools/templates, %s blocks per template, or %s loot tables");
+    public static final Msg STRUCTLOOT_SKIPPED = msg("structloot.skipped", "Skipped %s: %s");
+    public static final Msg STRUCTLOOT_RULES = msg("structloot.rules", "Global loot modifiers are not evaluated; unsafe or unverified loot tables are skipped");
+    public static final Msg LOOT_OUTPUT_LIMIT = msg("loot.output_limit", "Loot output exceeds the per-roll budget");
+    public static final Msg RUN_PROGRESS_DYNAMIC = msg("run.progress_dynamic", "Run #%s: %s batches finished, %s work streams pending");
+    public static final Msg RUN_STARTED_DYNAMIC = msg("run.started_dynamic", "Run #%s started: %s. Work is discovered incrementally; use /ma cancel to stop it");
+    public static final Msg RUN_REFUSED_DYNAMIC = msg("run.refused_dynamic", "%s is already running %s (%s batches finished). Wait for it or use /ma cancel");
+    public static final Msg MINE_VARIANT_LIMIT = msg("mine.variant_limit", "Mining simulation exceeded max_mining_drop_variants (%s); no barrels were placed");
+    public static final Msg MINE_SUMMARY_LIMIT = msg("mine.summary_limit", "Showing the ten largest yields of %s item/component variants; barrel output includes all variants that fit");
+    public static final Msg LOOT_RESOURCE_BUDGET = msg("loot.resource_budget", "more than 64 referenced resources");
+    public static final Msg LOOT_COMPLEXITY_BUDGET = msg("loot.complexity_budget", "more than 4096 data nodes or 32 nesting levels");
+    public static final Msg LOOT_RECURSIVE = msg("loot.recursive", "recursive loot reference");
+    public static final Msg LOOT_ROLL_BUDGET = msg("loot.roll_budget", "per-roll work budget exceeded");
+    public static final Msg LOOT_UNBOUNDED_PROVIDER = msg("loot.unbounded_provider", "unbounded number provider");
+
     public static final Msg PLAYER_ONLY = msg("failed.player_only", "This command can only be run in-game as a player");
     public static final Msg NO_ITEM = msg("failed.no_item", "%s is not holding anything");
     public static final Msg INVALID_SELECTOR = msg("failed.invalid_selector", "Unknown item source '%s'. Valid sources: %s");
@@ -87,6 +113,7 @@ public final class Messages {
     public static final Msg DRAIN_DONE = msg("drain.done", "Drained %s blocks of %s");
     public static final Msg DRAIN_TRUNCATED = msg("drain.truncated", "Drain stopped at the %s block cap set by max_drain_blocks. %s blocks removed, the body may continue past that");
 
+    public static final Msg SCAN_INVALID_HEIGHT = msg("scan.invalid_height", "Height range does not intersect this dimension (Y %s to %s)");
     public static final Msg SCAN_NONE = msg("scan.none", "No ores found");
     public static final Msg SCAN_HEADER = msg("scan.header", "Ore distribution for %s, Y %s to %s (total: %s)");
     public static final Msg SCAN_START = msg("scan.start", "Scanning ores across %s (%s chunks), Y %s to %s");
@@ -111,7 +138,7 @@ public final class Messages {
     public static final Msg LOOT_LINE = msg("loot.line", "%s%% %s (total %s)");
 
     public static final Msg CONFLICTS_START = msg("conflicts.start", "Scanning %s recipes in %s buckets");
-    public static final Msg CONFLICTS_DONE = msg("conflicts.done", "%s conflict groups, %s duplicate groups, %s dynamic recipes skipped");
+    public static final Msg CONFLICTS_DONE = msg("conflicts.done", "%s conflict groups, %s duplicate groups, %s dynamic or unsupported recipes skipped");
 
     public static final Msg SPAWNS_NO_BIOME = msg("spawns.no_biome", "%s does not occur in the sampled chunks of %s. Biomes present: %s");
     public static final Msg SPAWNS_START = msg("spawns.start", "Simulating %s ticks (%s in-game days, about %s real minutes) of spawning in %s across %s sampled chunks");
@@ -150,7 +177,7 @@ public final class Messages {
                 Object arg = args[i];
                 safe[i] = arg instanceof Component || arg instanceof Number || arg instanceof Boolean || arg instanceof String ? arg : String.valueOf(arg);
             }
-            return Component.translatable(key, safe);
+            return Component.translatableWithFallback(key, ALL.getOrDefault(key, key), safe);
         }
     }
 

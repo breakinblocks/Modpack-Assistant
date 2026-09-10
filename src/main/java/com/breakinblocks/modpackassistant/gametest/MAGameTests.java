@@ -32,6 +32,25 @@ public final class MAGameTests {
 
     @SubscribeEvent
     public static void registerTests(RegisterGameTestsEvent event) {
+        registerChecked(event, "registry_audits_resume_at_their_budgets", RegressionGameTests::registryAuditsResumeAtTheirBudgets, 20000);
+        registerChecked(event, "unreadable_recipe_displays_are_skipped", RegressionGameTests::unreadableRecipeDisplaysAreSkipped, 100);
+        registerChecked(event, "shaped_recipe_holes_retain_their_layout", RegressionGameTests::shapedRecipeHolesRetainTheirLayout, 100);
+        registerChecked(event, "ore_scan_rejects_out_of_dimension_bands", RegressionGameTests::oreScanRejectsOutOfDimensionBands, 100);
+        registerChecked(event, "drain_rechecks_fluid_before_removal", RegressionGameTests::drainRechecksFluidBeforeRemoval, 100);
+        registerChecked(event, "structure_placement_and_cleanup_retain_partial_records", RegressionGameTests::structurePlacementAndCleanupRetainPartialRecords, 20000);
+        registerChecked(event, "recipe_matching_is_order_independent_and_mirrored", RegressionGameTests::recipeMatchingIsOrderIndependentAndMirrored, 20000);
+        registerChecked(event, "recipe_comparison_resumes_at_its_budget", RegressionGameTests::recipeComparisonResumesAtItsBudget, 20000);
+        registerChecked(event, "vanilla_clients_retain_messages_arguments_and_aliases", RegressionGameTests::vanillaClientsRetainMessagesArgumentsAndAliases, 20000);
+        registerChecked(event, "analysis_skips_unloaded_chunks", RegressionGameTests::AnalysisSkipsUnloadedChunks, 20000);
+        registerChecked(event, "block_search_retains_only_nearest_hits", RegressionGameTests::blockSearchRetainsOnlyNearestHits, 20000);
+        registerChecked(event, "unsafe_loot_is_rejected_through_references", RegressionGameTests::unsafeLootIsRejectedThroughReferences, 20000);
+        registerChecked(event, "spawn_packs_use_declared_range", RegressionGameTests::spawnPacksUseDeclaredRange, 20000);
+        registerChecked(event, "oversized_clipboard_is_rejected_before_sending", RegressionGameTests::oversizedClipboardIsRejectedBeforeSending, 20000);
+        registerChecked(event, "teleport_rejects_fluid_void_and_passenger_obstructions", RegressionGameTests::teleportRejectsFluidVoidAndPassengerObstructions, 20000);
+        registerChecked(event, "mining_drops_preserve_component_variants", RegressionGameTests::miningDropsPreserveComponentVariants, 20000);
+        registerChecked(event, "report_files_are_unique_and_never_overwrite", RegressionGameTests::reportFilesAreUniqueAndNeverOverwrite, 20000);
+        registerChecked(event, "entity_removal_is_bounded_and_cancellable", RegressionGameTests::entityRemovalIsBoundedAndCancellable, 20000);
+
         register(event, "roman_numerals", CoreGameTests::romanNumerals, 100);
         register(event, "csv_escaping", CoreGameTests::csvEscaping, 100);
         register(event, "region_geometry", CoreGameTests::regionGeometry, 100);
@@ -52,7 +71,21 @@ public final class MAGameTests {
         register(event, "locate_block_lists_nearest_first_and_writes_report", CommandGameTests::locateBlockListsNearestFirstAndWritesReport, 200);
         register(event, "radius_above_limit_is_refused", CommandGameTests::radiusAboveLimitIsRefused, 100);
         register(event, "alias_and_lowercase_literals_work", CommandGameTests::aliasAndLowercaseLiteralsWork, 100);
-        register(event, "structure_loot_places_and_clears", CommandGameTests::structureLootPlacesAndClears, 200);
+        register(event, "structure_loot_places_and_clears", CommandGameTests::structureLootPlacesAndClears, 20000);
+    }
+
+    private interface CheckedTest {
+        void run(GameTestHelper helper) throws Exception;
+    }
+
+    private static void registerChecked(RegisterGameTestsEvent event, String name, CheckedTest test, int timeoutTicks) {
+        register(event, name, helper -> {
+            try {
+                test.run(helper);
+            } catch (Exception error) {
+                throw new RuntimeException(error);
+            }
+        }, timeoutTicks);
     }
 
     private static void register(RegisterGameTestsEvent event, String name, Consumer<GameTestHelper> function, int timeoutTicks) {

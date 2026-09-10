@@ -4,10 +4,14 @@ import com.breakinblocks.modpackassistant.util.Messages;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.serialization.Codec;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.commands.arguments.StringRepresentableArgument;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import java.util.concurrent.CompletableFuture;
 import net.minecraft.util.StringRepresentable;
 
-public final class KillTypeArgument extends StringRepresentableArgument<KillTypeArgument.KillType> {
+public final class KillTypeArgument {
     public enum KillType implements StringRepresentable {
         ALL("all", Messages.KILL_TYPE_ALL),
         ANIMALS("animals", Messages.KILL_TYPE_ANIMALS),
@@ -37,15 +41,17 @@ public final class KillTypeArgument extends StringRepresentableArgument<KillType
         }
     }
 
-    public KillTypeArgument() {
-        super(KillType.CODEC, KillType::values);
+    private KillTypeArgument() {}
+
+    public static StringArgumentType killType() {
+        return StringArgumentType.word();
     }
 
-    public static KillTypeArgument killType() {
-        return new KillTypeArgument();
+    public static CompletableFuture<Suggestions> suggest(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        return MAArguments.suggest(KillType.values(), builder);
     }
 
-    public static KillType get(CommandContext<CommandSourceStack> context, String name) {
-        return context.getArgument(name, KillType.class);
+    public static KillType get(CommandContext<CommandSourceStack> context, String name) throws CommandSyntaxException {
+        return MAArguments.get(context, name, KillType.values());
     }
 }

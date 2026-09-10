@@ -8,6 +8,9 @@ public final class MAConfig {
     public static final ModConfigSpec.IntValue ITEM_INSPECTION_PERMISSION;
     public static final ModConfigSpec.IntValue MAX_CLEAR_RADIUS;
     public static final ModConfigSpec.IntValue MAX_SCAN_RADIUS;
+    public static final ModConfigSpec.IntValue MAX_LOCATE_RESULTS;
+    public static final ModConfigSpec.IntValue MAX_STRUCTURE_LOOT_CHESTS;
+    public static final ModConfigSpec.IntValue MAX_MINING_DROP_VARIANTS;
     public static final ModConfigSpec.IntValue MAX_DRAIN_BLOCKS;
     public static final ModConfigSpec.IntValue MAX_LOOT_ITERATIONS;
     public static final ModConfigSpec.IntValue MAX_SIMULATED_TICKS;
@@ -35,6 +38,12 @@ public final class MAConfig {
         MAX_DRAIN_BLOCKS = builder
                 .comment("Largest number of fluid blocks a single drain may remove.")
                 .defineInRange("max_drain_blocks", 250_000, 1, 4_000_000);
+        MAX_LOCATE_RESULTS = builder.comment("Maximum retained block-search hits; additional matches are counted but not retained.")
+                .defineInRange("max_locate_results", 10_000, 10, 100_000);
+        MAX_STRUCTURE_LOOT_CHESTS = builder.comment("Maximum chest/sign pairs placed by one structure loot test.")
+                .defineInRange("max_structure_loot_chests", 256, 1, 4096);
+        MAX_MINING_DROP_VARIANTS = builder.comment("Maximum distinct item/component variants retained by a mining simulation.")
+                .defineInRange("max_mining_drop_variants", 10_000, 10, 100_000);
         MAX_LOOT_ITERATIONS = builder
                 .comment("Largest iteration count accepted by the loot simulator.")
                 .defineInRange("max_loot_iterations", 1_000_000, 1, 10_000_000);
@@ -83,8 +92,20 @@ public final class MAConfig {
         return MAX_DRAIN_BLOCKS.get();
     }
 
+    public static int maxLocateResults() {
+        return MAX_LOCATE_RESULTS.get();
+    }
+
+    public static int maxStructureLootChests() {
+        return MAX_STRUCTURE_LOOT_CHESTS.get();
+    }
+
     public static int maxLootIterations() {
         return MAX_LOOT_ITERATIONS.get();
+    }
+
+    public static int maxMiningDropVariants() {
+        return MAX_MINING_DROP_VARIANTS.get();
     }
 
     public static int maxSimulatedTicks() {

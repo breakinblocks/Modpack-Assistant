@@ -9,10 +9,11 @@ import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 public record SetClipboardPayload(String text) implements CustomPacketPayload {
+    public static final int MAX_TEXT_LENGTH = 32_767;
     public static final Type<SetClipboardPayload> TYPE = new Type<>(ModpackAssistant.id("set_clipboard"));
 
     public static final StreamCodec<ByteBuf, SetClipboardPayload> STREAM_CODEC = StreamCodec.composite(
-            ByteBufCodecs.STRING_UTF8, SetClipboardPayload::text,
+            ByteBufCodecs.stringUtf8(MAX_TEXT_LENGTH), SetClipboardPayload::text,
             SetClipboardPayload::new
     );
 

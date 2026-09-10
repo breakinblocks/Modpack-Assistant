@@ -100,7 +100,7 @@ public final class MACommands {
         root.then(node);
         String lower = node.getLiteral().toLowerCase(Locale.ROOT);
         if (!lower.equals(node.getLiteral())) {
-            root.then(Commands.literal(lower).requires(node.getRequirement()).redirect(node));
+            root.then(Commands.literal(lower).requires(node.getRequirement()).executes(node.getCommand()).redirect(node));
         }
     }
 }

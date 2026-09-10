@@ -151,6 +151,9 @@ public final class DrainCommand {
             for (int i = from; i < to; i++) {
                 cursor.set(found.getLong(i));
                 BlockState state = level.getBlockState(cursor);
+                if (state.getFluidState().isEmpty() || !state.getFluidState().getType().isSame(fluid)) {
+                    continue;
+                }
                 if (state.hasProperty(BlockStateProperties.WATERLOGGED) && state.getValue(BlockStateProperties.WATERLOGGED)) {
                     level.setBlock(cursor, state.setValue(BlockStateProperties.WATERLOGGED, false), Block.UPDATE_CLIENTS);
                 } else if (!state.getFluidState().isEmpty()) {

@@ -36,8 +36,8 @@ public final class AuditUnificationCommand {
                 .note("namespace_filter", namespace == null ? "c, forge" : namespace);
 
         Run run = new Run(source, "unification audit", source.getLevel().dimension());
-        run.job(() -> auditor.audit(BuiltInRegistries.ITEM));
-        run.job(() -> auditor.audit(BuiltInRegistries.BLOCK));
+        run.repeat(auditor.auditJob(BuiltInRegistries.ITEM, 32));
+        run.repeat(auditor.auditJob(BuiltInRegistries.BLOCK, 32));
         run.onComplete(finished -> {
             finished.message(Messages.UNIFY_DONE.get(auditor.unresolvedCount(), auditor.emptyCount(), auditor.resolvedCount()));
             ReportWriter.deliver(finished, ReportWriter.Family.TAGS, "unification", "log", auditor.log(context));

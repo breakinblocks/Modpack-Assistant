@@ -1,5 +1,6 @@
 package com.breakinblocks.modpackassistant.commands.items;
 
+import com.breakinblocks.modpackassistant.net.SetClipboardPayload;
 import com.breakinblocks.modpackassistant.commands.CommandResults;
 import com.breakinblocks.modpackassistant.commands.MAPermissions;
 import com.breakinblocks.modpackassistant.net.MANetworking;
@@ -47,6 +48,9 @@ public final class CopyCommand {
         }
 
         String output = format.write(items, source.registryAccess());
+        if (output.length() > SetClipboardPayload.MAX_TEXT_LENGTH) {
+            return CommandResults.fail(source, Messages.CLIPBOARD_TOO_LARGE.get(output.length(), SetClipboardPayload.MAX_TEXT_LENGTH));
+        }
         if (MANetworking.sendClipboard(player, output)) {
             source.sendSuccess(() -> Messages.CLIPBOARD_COPIED.get().withStyle(ChatFormatting.YELLOW), false);
         } else {

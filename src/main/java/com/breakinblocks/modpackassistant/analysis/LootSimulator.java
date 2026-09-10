@@ -1,5 +1,6 @@
 package com.breakinblocks.modpackassistant.analysis;
 
+import com.breakinblocks.modpackassistant.util.Messages;
 import com.breakinblocks.modpackassistant.commands.items.ItemStrings;
 import com.breakinblocks.modpackassistant.report.CsvWriter;
 import com.breakinblocks.modpackassistant.report.ReportWriter;
@@ -9,6 +10,8 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.LootTable;
+import net.minecraft.world.level.storage.loot.LootContext;
+import java.util.Optional;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -94,22 +97,31 @@ public final class LootSimulator {
     }
 
     public void rollBatch() {
-        int end = Math.min(iterations, rolled + BATCH);
+        rollBatch(BATCH);
+    }
+
+    public void rollBatch(int budget) {
+        int end = Math.min(iterations, rolled + budget);
         Map<String, Integer> perRoll = new LinkedHashMap<>();
         while (rolled < end) {
             perRoll.clear();
-            List<ItemStack> drops = table.getRandomItems(params, random);
+            List<ItemStack> drops = new ArrayList<>();
+            table.getRandomItemsRaw(new LootContext.Builder(params).withOptionalRandomSource(random).create(Optional.empty()), stack -> {
+                if (drops.size() >= 10_000) throw new IllegalStateException(Messages.LOOT_OUTPUT_LIMIT.get().getString());
+                drops.add(stack);
+            });
             int count = 0;
             for (ItemStack stack : drops) {
                 if (stack.isEmpty()) {
                     continue;
                 }
-                count += stack.getCount();
+                count = Math.addExact(count, stack.getCount());
                 String key = ItemStrings.giveString(stack, lookup);
-                perRoll.merge(key, stack.getCount(), Integer::sum);
+                perRoll.merge(key, stack.getCount(), Math::addExact);
             }
             for (Map.Entry<String, Integer> entry : perRoll.entrySet()) {
                 Stat stat = stats.computeIfAbsent(entry.getKey(), key -> {
+                    if (stats.size() >= 10_000) throw new IllegalStateException(Messages.LOOT_OUTPUT_LIMIT.get().getString());
                     int bracket = key.indexOf('[');
                     return new Stat(bracket < 0 ? key : key.substring(0, bracket), bracket < 0 ? "" : key.substring(bracket));
                 });

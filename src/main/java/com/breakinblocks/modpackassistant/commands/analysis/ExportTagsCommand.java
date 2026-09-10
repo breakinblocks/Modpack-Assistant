@@ -24,9 +24,9 @@ public final class ExportTagsCommand {
     public static LiteralArgumentBuilder<CommandSourceStack> build() {
         return Commands.literal("exportTags")
                 .requires(MAPermissions.GAMEMASTER)
-                .then(Commands.argument("registry", RegistryKindArgument.registryKind())
+                .then(Commands.argument("registry", RegistryKindArgument.registryKind()).suggests(RegistryKindArgument::suggest)
                         .executes(context -> export(context.getSource(), RegistryKindArgument.get(context, "registry"), ReportFormat.JSON))
-                        .then(Commands.argument("format", ReportFormatArgument.reportFormat())
+                        .then(Commands.argument("format", ReportFormatArgument.reportFormat()).suggests(ReportFormatArgument::suggest)
                                 .executes(context -> export(context.getSource(), RegistryKindArgument.get(context, "registry"), ReportFormatArgument.get(context, "format")))));
     }
 

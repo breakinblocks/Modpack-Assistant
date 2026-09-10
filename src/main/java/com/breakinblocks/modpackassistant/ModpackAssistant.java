@@ -1,6 +1,5 @@
 package com.breakinblocks.modpackassistant;
 
-import com.breakinblocks.modpackassistant.commands.args.MAArguments;
 import com.breakinblocks.modpackassistant.config.MAConfig;
 import com.breakinblocks.modpackassistant.gametest.MAGameTests;
 import com.breakinblocks.modpackassistant.jobs.ChunkAccessor;
@@ -23,7 +22,6 @@ public class ModpackAssistant {
     }
 
     public ModpackAssistant(IEventBus eventBus, ModContainer container, Dist dist) {
-        MAArguments.ARGUMENT_TYPES.register(eventBus);
         ChunkAccessor.TICKET_TYPES.register(eventBus);
         MAGameTests.TEST_INSTANCE_TYPES.register(eventBus);
         container.registerConfig(ModConfig.Type.COMMON, MAConfig.SPEC);

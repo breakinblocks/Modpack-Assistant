@@ -3,12 +3,16 @@ package com.breakinblocks.modpackassistant.commands.args;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.serialization.Codec;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.commands.arguments.StringRepresentableArgument;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import java.util.concurrent.CompletableFuture;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.util.StringRepresentable;
 
-public final class RegistryKindArgument extends StringRepresentableArgument<RegistryKindArgument.RegistryKind> {
+public final class RegistryKindArgument {
     public enum RegistryKind implements StringRepresentable {
         ITEM("item", BuiltInRegistries.ITEM),
         BLOCK("block", BuiltInRegistries.BLOCK),
@@ -35,15 +39,17 @@ public final class RegistryKindArgument extends StringRepresentableArgument<Regi
         }
     }
 
-    public RegistryKindArgument() {
-        super(RegistryKind.CODEC, RegistryKind::values);
+    private RegistryKindArgument() {}
+
+    public static StringArgumentType registryKind() {
+        return StringArgumentType.word();
     }
 
-    public static RegistryKindArgument registryKind() {
-        return new RegistryKindArgument();
+    public static CompletableFuture<Suggestions> suggest(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        return MAArguments.suggest(RegistryKind.values(), builder);
     }
 
-    public static RegistryKind get(CommandContext<CommandSourceStack> context, String name) {
-        return context.getArgument(name, RegistryKind.class);
+    public static RegistryKind get(CommandContext<CommandSourceStack> context, String name) throws CommandSyntaxException {
+        return MAArguments.get(context, name, RegistryKind.values());
     }
 }

@@ -1,6 +1,14 @@
 package com.breakinblocks.modpackassistant.commands.world;
 
 import com.breakinblocks.modpackassistant.analysis.LootContexts;
+import com.breakinblocks.modpackassistant.analysis.LootSafety;
+import com.breakinblocks.modpackassistant.config.MAConfig;
+import com.breakinblocks.modpackassistant.jobs.Run;
+import com.breakinblocks.modpackassistant.jobs.RunScheduler;
+import net.minecraft.world.level.storage.loot.LootContext;
+import net.minecraft.util.RandomSource;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import com.breakinblocks.modpackassistant.analysis.StructureLootResolver;
 import com.breakinblocks.modpackassistant.commands.CommandResults;
 import com.breakinblocks.modpackassistant.commands.MAPermissions;
@@ -64,62 +72,137 @@ public final class TestStructureLootCommand {
             return CommandResults.fail(source, Messages.STRUCTLOOT_STANDING.get(record.positions().size()));
         }
 
-        StructureLootResolver.Result resolved = StructureLootResolver.resolve(level, structure);
-        if (resolved.isEmpty()) {
-            return CommandResults.fail(source, Messages.STRUCTLOOT_NONE.get(structure.key().identifier(), String.join(", ", resolved.tried())));
-        }
-
-        Direction facing = player.getDirection();
-        Direction right = facing.getClockWise();
-        BlockPos origin = player.blockPosition().relative(facing, 3);
-        List<BlockPos> placed = new ArrayList<>();
-        int chests = 0;
-        int confirmed = 0;
-        int heuristic = 0;
-        int row = 0;
-        int column = 0;
-
-        for (StructureLootResolver.Found found : resolved.tables()) {
-            if (found.confirmed()) {
-                confirmed++;
+        Run run = new Run(source, "structure loot test", level.dimension());
+        StructureLootResolver resolver = new StructureLootResolver(level, structure);
+        Placement work = new Placement(level, player, record, samples, run);
+        run.repeat(() -> {
+            if (!resolver.step()) return false;
+            StructureLootResolver.Result result = resolver.result();
+            if (result.isEmpty()) {
+                run.message(Messages.STRUCTLOOT_NONE.get(structure.key().identifier(), String.join(", ", result.tried())));
             } else {
-                heuristic++;
+                work.tables = result.tables();
+                run.repeat(work::step);
             }
-            LootTable table = level.getServer().reloadableRegistries().getLootTable(found.table());
-            for (int sample = 1; sample <= samples; sample++) {
-                LootContexts.Built built = LootContexts.build(level, origin, player, player.getLuck(), table.getParamSet());
-                List<ItemStack> loot = built.ok() ? table.getRandomItems(built.params()) : List.of();
-                int parts = Math.max(1, (loot.size() + CHEST_SLOTS - 1) / CHEST_SLOTS);
-                for (int part = 0; part < parts; part++) {
-                    BlockPos chestPos = origin.relative(facing, row * 2).relative(right, column);
-                    BlockPos signPos = chestPos.relative(facing.getOpposite());
-                    column++;
-                    if (column >= 8) {
-                        column = 0;
-                        row++;
-                    }
-                    if (!level.getBlockState(chestPos).canBeReplaced() || !level.getBlockState(signPos).canBeReplaced()) {
-                        continue;
-                    }
-                    level.setBlockAndUpdate(chestPos, Blocks.CHEST.defaultBlockState());
-                    if (level.getBlockEntity(chestPos) instanceof Container container) {
-                        int from = part * CHEST_SLOTS;
-                        int to = Math.min(loot.size(), from + CHEST_SLOTS);
-                        for (int i = from; i < to; i++) {
-                            container.setItem(i - from, loot.get(i));
-                        }
-                        container.setChanged();
-                    }
-                    placeSign(level, signPos, facing.getOpposite(), found, samples > 1 ? sample : 0, parts > 1 ? part + 1 : 0, built);
-                    placed.add(chestPos);
-                    placed.add(signPos);
-                    chests++;
-                }
-            }
+            return true;
+        });
+        run.onComplete(finished -> finished.message(Messages.STRUCTLOOT_PLACED.get(work.chests, work.tables.size(),
+                work.origin.toShortString(), work.tables.stream().filter(StructureLootResolver.Found::confirmed).count(),
+                work.tables.stream().filter(found -> !found.confirmed()).count())));
+        if (!RunScheduler.tryStart(run)) return 0;
+        run.message(Messages.STRUCTLOOT_START.get(structure.key().identifier(), work.limit));
+        run.message(Messages.STRUCTLOOT_RULES.get());
+        return 1;
+    }
+
+    private static final class Placement {
+        final ServerLevel level;
+        final ServerPlayer player;
+        final TestLootPlacements record;
+        final int samples;
+        final Run run;
+        final int limit = MAConfig.maxStructureLootChests();
+        final Direction facing;
+        final BlockPos origin;
+        final float luck;
+        final RandomSource random = RandomSource.create();
+        List<StructureLootResolver.Found> tables = List.of();
+        int tableIndex;
+        int sample = 1;
+        int part;
+        int gridIndex;
+        int chests;
+        LootSafety safety;
+        LootTable table;
+        LootContexts.Built built;
+        List<ItemStack> loot;
+
+        Placement(ServerLevel level, ServerPlayer player, TestLootPlacements record, int samples, Run run) {
+            this.level = level;
+            this.player = player;
+            this.record = record;
+            this.samples = samples;
+            this.run = run;
+            facing = player.getDirection();
+            origin = player.blockPosition().relative(facing, 3);
+            luck = player.getLuck();
         }
 
-        record.record(level.dimension(), placed);
-        return CommandResults.success(source, Messages.STRUCTLOOT_PLACED.get(chests, resolved.tables().size(), origin.toShortString(), confirmed, heuristic), chests);
+        boolean step() {
+            if (tableIndex >= tables.size()) return true;
+            if (gridIndex >= limit) {
+                run.message(Messages.STRUCTLOOT_LIMIT.get(limit));
+                return true;
+            }
+            StructureLootResolver.Found found = tables.get(tableIndex);
+            if (safety == null) {
+                safety = new LootSafety(level, found.table(), luck);
+                table = level.getServer().reloadableRegistries().getLootTable(found.table());
+            }
+            safety.verifyCurrent();
+            if (!safety.complete()) {
+                try {
+                    safety.step();
+                } catch (IllegalArgumentException error) {
+                    run.message(Messages.STRUCTLOOT_SKIPPED.get(found.table().identifier(), error.getMessage()));
+                    nextTable();
+                }
+                return false;
+            }
+            if (loot == null) {
+                built = LootContexts.build(level, origin, player, luck, table.getParamSet());
+                if (!built.ok()) {
+                    run.message(Messages.LOOT_MISSING_PARAMS.get(found.table().identifier(), String.join(", ", built.missing()), table.getParamSet()));
+                    nextTable();
+                    return false;
+                }
+                loot = new ArrayList<>();
+                int stackLimit = (limit - gridIndex) * CHEST_SLOTS;
+                table.getRandomItemsRaw(new LootContext.Builder(built.params()).withOptionalRandomSource(random).create(Optional.empty()), stack -> {
+                    if (stack.isEmpty()) return;
+                    int left = stack.getCount();
+                    while (left > 0) {
+                        if (loot.size() >= stackLimit) throw new IllegalArgumentException(Messages.LOOT_OUTPUT_LIMIT.get().getString());
+                        int count = Math.min(left, stack.getMaxStackSize());
+                        loot.add(stack.copyWithCount(count));
+                        left -= count;
+                    }
+                });
+                return false;
+            }
+            int parts = Math.max(1, (loot.size() + CHEST_SLOTS - 1) / CHEST_SLOTS);
+            BlockPos chestPos = origin.relative(facing, gridIndex / 8 * 2).relative(facing.getClockWise(), gridIndex % 8);
+            BlockPos signPos = chestPos.relative(facing.getOpposite());
+            gridIndex++;
+            if (level.isInsideBuildHeight(chestPos) && level.getWorldBorder().isWithinBounds(chestPos)
+                    && level.getWorldBorder().isWithinBounds(signPos)
+                    && level.getBlockState(chestPos).canBeReplaced() && level.getBlockState(signPos).canBeReplaced()
+                    && level.setBlockAndUpdate(chestPos, Blocks.CHEST.defaultBlockState())) {
+                record.append(level.dimension(), chestPos);
+                if (level.getBlockEntity(chestPos) instanceof Container container) {
+                    int from = part * CHEST_SLOTS;
+                    for (int i = from; i < Math.min(loot.size(), from + CHEST_SLOTS); i++) container.setItem(i - from, loot.get(i));
+                    container.setChanged();
+                }
+                record.append(level.dimension(), signPos);
+                placeSign(level, signPos, facing.getOpposite(), found, samples > 1 ? sample : 0, parts > 1 ? part + 1 : 0, built);
+                chests++;
+            }
+            if (++part >= parts) {
+                loot = null;
+                part = 0;
+                if (++sample > samples) nextTable();
+            }
+            return tableIndex >= tables.size();
+        }
+
+        private void nextTable() {
+            tableIndex++;
+            sample = 1;
+            part = 0;
+            loot = null;
+            safety = null;
+        }
     }
 
     private static void placeSign(ServerLevel level, BlockPos pos, Direction facing, StructureLootResolver.Found found, int sample, int part, LootContexts.Built built) {
@@ -165,21 +248,22 @@ public final class TestStructureLootCommand {
             return CommandResults.fail(source, Messages.STRUCTLOOT_NOTHING.get());
         }
         ServerLevel level = source.getServer().getLevel(record.dimension());
-        int removed = 0;
-        if (level != null) {
-            for (BlockPos pos : record.positions()) {
-                BlockState state = level.getBlockState(pos);
-                if (!state.is(Blocks.CHEST) && !state.is(Blocks.OAK_WALL_SIGN)) {
-                    continue;
-                }
-                if (level.getBlockEntity(pos) instanceof Container container) {
-                    container.clearContent();
-                }
+        if (level == null) return CommandResults.fail(source, Messages.DIMENSION_NOT_FOUND.get());
+        AtomicInteger removed = new AtomicInteger();
+        Run run = new Run(source, "structure loot cleanup", level.dimension());
+        run.repeat(() -> {
+            if (record.isEmpty()) return true;
+            BlockPos pos = record.positions().getLast();
+            BlockState state = level.getBlockState(pos);
+            if (state.is(Blocks.CHEST) || state.is(Blocks.OAK_WALL_SIGN)) {
+                if (level.getBlockEntity(pos) instanceof Container container) container.clearContent();
                 level.setBlockAndUpdate(pos, Blocks.AIR.defaultBlockState());
-                removed++;
+                removed.incrementAndGet();
             }
-        }
-        record.clear();
-        return CommandResults.success(source, Messages.STRUCTLOOT_CLEARED.get(removed), removed);
+            record.forget(pos);
+            return record.isEmpty();
+        });
+        run.onComplete(finished -> finished.message(Messages.STRUCTLOOT_CLEARED.get(removed.get())));
+        return RunScheduler.tryStart(run) ? 1 : 0;
     }
 }

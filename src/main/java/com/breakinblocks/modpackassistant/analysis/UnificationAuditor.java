@@ -4,6 +4,9 @@ import com.breakinblocks.modpackassistant.report.CsvWriter;
 import com.breakinblocks.modpackassistant.report.ReportWriter;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import net.minecraft.core.Holder;
+import net.minecraft.core.HolderSet;
+import java.util.Iterator;
+import java.util.function.BooleanSupplier;
 import net.minecraft.core.Registry;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
@@ -58,34 +61,33 @@ public final class UnificationAuditor {
         return namespaceOk && id.getPath().indexOf('/') > 0;
     }
 
-    public <T> void audit(Registry<T> registry) {
+    public <T> BooleanSupplier auditJob(Registry<T> registry, int budget) {
+        if (budget < 1) throw new IllegalArgumentException("budget must be positive");
+        Iterator<HolderSet.Named<T>> tags = registry.listTags().iterator();
         String registryName = registry.key().identifier().getPath();
-        registry.listTags().forEach(set -> {
-            TagKey<T> tag = set.key();
-            if (!isMaterialTag(tag)) {
-                return;
-            }
-            List<Identifier> entries = new ArrayList<>();
-            for (Holder<T> holder : set) {
-                holder.unwrapKey().map(ResourceKey::identifier).ifPresent(entries::add);
-            }
-            entries.sort(Comparator.naturalOrder());
-            TagReport report = new TagReport(registryName, tag.location(), entries);
-            int[] counts = familyCounts.computeIfAbsent(registryName + ":" + report.family(), ignored -> new int[3]);
-            if (entries.isEmpty()) {
-                empty.add(report);
-                counts[1]++;
-            } else if (entries.size() == 1) {
-                resolved++;
-                counts[2]++;
-            } else {
-                unresolved.add(report);
-                counts[0]++;
-                for (int i = 1; i < entries.size(); i++) {
-                    surplusByMod.addTo(entries.get(i).getNamespace(), 1);
+        return () -> {
+            for (int i = 0; i < budget && tags.hasNext(); i++) {
+                HolderSet.Named<T> set = tags.next();
+                if (!isMaterialTag(set.key())) continue;
+                List<Identifier> entries = new ArrayList<>();
+                for (Holder<T> holder : set) holder.unwrapKey().map(ResourceKey::identifier).ifPresent(entries::add);
+                entries.sort(Comparator.naturalOrder());
+                TagReport report = new TagReport(registryName, set.key().location(), entries);
+                int[] counts = familyCounts.computeIfAbsent(registryName + ":" + report.family(), ignored -> new int[3]);
+                if (entries.isEmpty()) {
+                    empty.add(report);
+                    counts[1]++;
+                } else if (entries.size() == 1) {
+                    resolved++;
+                    counts[2]++;
+                } else {
+                    unresolved.add(report);
+                    counts[0]++;
+                    for (int entry = 1; entry < entries.size(); entry++) surplusByMod.addTo(entries.get(entry).getNamespace(), 1);
                 }
             }
-        });
+            return !tags.hasNext();
+        };
     }
 
     public String log(ReportWriter.Context context) {

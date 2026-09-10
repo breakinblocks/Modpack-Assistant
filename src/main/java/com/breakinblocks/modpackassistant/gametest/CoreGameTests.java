@@ -100,6 +100,11 @@ public final class CoreGameTests {
                 helper.assertFalse(output.trim().endsWith(",") || output.contains(",\n]") || output.contains(",\n  }\n]"), format.formatName() + " has a trailing separator: " + output);
             }
         }
+        ItemStack damaged = new ItemStack(Items.DIAMOND_PICKAXE);
+        damaged.set(DataComponents.DAMAGE, 7);
+        String plain = OutputFormat.PLAIN.write(List.of(new ItemStack(Items.STONE), new ItemStack(Items.DIRT, 2), stack, damaged), lookup);
+        helper.assertTrue(plain.equals("minecraft:stone\n2 minecraft:dirt\n17 minecraft:stone\nminecraft:diamond_pickaxe[minecraft:damage=7]"),
+                "plain output should omit single counts and preserve larger counts and components: " + plain);
         helper.succeed();
     }
 

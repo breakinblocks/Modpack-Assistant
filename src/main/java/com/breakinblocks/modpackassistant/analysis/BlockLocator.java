@@ -1,5 +1,6 @@
 package com.breakinblocks.modpackassistant.analysis;
 
+import com.breakinblocks.modpackassistant.config.MAConfig;
 import com.breakinblocks.modpackassistant.report.CsvWriter;
 import com.breakinblocks.modpackassistant.report.ReportWriter;
 import net.minecraft.core.BlockPos;
@@ -13,6 +14,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.PriorityQueue;
 
 public final class BlockLocator {
     public record Hit(BlockPos pos, double distance) {
@@ -20,19 +22,35 @@ public final class BlockLocator {
 
     private final Block block;
     private final Vec3 origin;
-    private final List<Hit> hits = new ArrayList<>();
+    private static final Comparator<Hit> ORDER = Comparator.comparingDouble(Hit::distance)
+            .thenComparingLong(hit -> hit.pos().asLong());
+    private final PriorityQueue<Hit> hits = new PriorityQueue<>(ORDER.reversed());
+    private final int limit;
+    private long matches;
     private int chunksScanned;
 
     public BlockLocator(Block block, Vec3 origin) {
+        this(block, origin, MAConfig.maxLocateResults());
+    }
+
+    public BlockLocator(Block block, Vec3 origin, int limit) {
+        if (limit < 1) {
+            throw new IllegalArgumentException("limit must be positive");
+        }
         this.block = block;
         this.origin = origin;
+        this.limit = limit;
     }
 
     public Block block() {
         return block;
     }
 
-    public int total() {
+    public long total() {
+        return matches;
+    }
+
+    public int retained() {
         return hits.size();
     }
 
@@ -45,7 +63,7 @@ public final class BlockLocator {
         LevelChunkSection[] sections = chunk.getSections();
         for (int index = 0; index < sections.length; index++) {
             LevelChunkSection section = sections[index];
-            if (section.hasOnlyAir() || !section.maybeHas(state -> state.is(block))) {
+            if (!section.maybeHas(state -> state.is(block))) {
                 continue;
             }
             int baseY = SectionPos.sectionToBlockCoord(chunk.getSectionYFromSectionIndex(index));
@@ -54,7 +72,14 @@ public final class BlockLocator {
                     for (int x = 0; x < 16; x++) {
                         if (section.getBlockState(x, y, z).is(block)) {
                             BlockPos at = new BlockPos(pos.getMinBlockX() + x, baseY + y, pos.getMinBlockZ() + z);
-                            hits.add(new Hit(at, Math.sqrt(at.distToCenterSqr(origin))));
+                            matches++;
+                            Hit hit = new Hit(at, Math.sqrt(at.distToCenterSqr(origin)));
+                            if (hits.size() < limit) {
+                                hits.add(hit);
+                            } else if (ORDER.compare(hit, hits.peek()) < 0) {
+                                hits.poll();
+                                hits.add(hit);
+                            }
                         }
                     }
                 }
@@ -64,7 +89,7 @@ public final class BlockLocator {
 
     public List<Hit> nearest() {
         List<Hit> sorted = new ArrayList<>(hits);
-        sorted.sort(Comparator.comparingDouble(Hit::distance));
+        sorted.sort(ORDER);
         return sorted;
     }
 

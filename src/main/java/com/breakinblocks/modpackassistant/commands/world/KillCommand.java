@@ -27,8 +27,10 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import com.breakinblocks.modpackassistant.jobs.EntityIndex;
+import com.breakinblocks.modpackassistant.jobs.Run;
+import com.breakinblocks.modpackassistant.jobs.RunScheduler;
 import java.util.function.Predicate;
 
 public final class KillCommand {
@@ -38,7 +40,7 @@ public final class KillCommand {
     public static LiteralArgumentBuilder<CommandSourceStack> build(CommandBuildContext buildContext) {
         return Commands.literal("kill")
                 .requires(MAPermissions.GAMEMASTER)
-                .then(Commands.argument("type", KillTypeArgument.killType())
+                .then(Commands.argument("type", KillTypeArgument.killType()).suggests(KillTypeArgument::suggest)
                         .executes(context -> kill(context.getSource(), KillTypeArgument.get(context, "type"))))
                 .then(Commands.literal("by")
                         .then(Commands.argument("entity", ResourceArgument.resource(buildContext, Registries.ENTITY_TYPE))
@@ -47,77 +49,44 @@ public final class KillCommand {
     }
 
     private static int kill(CommandSourceStack source, KillType type) throws CommandSyntaxException {
-        ServerLevel level = source.getLevel();
-        ServerPlayer caller = CommandResults.player(source);
-        Component typeName = type.label().get();
-        Component dimension = Component.literal(level.dimension().identifier().toString());
-        source.sendSuccess(() -> Messages.KILL_START.get(typeName, dimension), true);
-
-        int killed = switch (type) {
-            case PLAYERS -> killPlayers(level, player -> true);
-            case ME -> killPlayers(level, player -> player.getUUID().equals(caller.getUUID()));
-            case ALL -> removeEntities(level, entity -> !(entity instanceof Player), true);
-            case ANIMALS -> removeEntities(level, entity -> entity instanceof Animal, true);
-            case MONSTERS -> removeEntities(level, entity -> entity instanceof Enemy && !(entity instanceof Player), true);
-            case ITEMS -> removeEntities(level, entity -> entity instanceof ItemEntity, true);
-            case XP -> removeEntities(level, entity -> entity instanceof ExperienceOrb, true);
+        ServerPlayer caller = type == KillType.ME ? CommandResults.player(source) : null;
+        Predicate<Entity> filter = switch (type) {
+            case PLAYERS -> entity -> entity instanceof ServerPlayer;
+            case ME -> entity -> entity == caller;
+            case ALL -> entity -> !(entity instanceof Player);
+            case ANIMALS -> entity -> entity instanceof Animal && !(entity instanceof Player);
+            case MONSTERS -> entity -> entity instanceof Enemy && !(entity instanceof Player);
+            case ITEMS -> entity -> entity instanceof ItemEntity;
+            case XP -> entity -> entity instanceof ExperienceOrb;
         };
-        return report(source, killed, typeName);
+        return schedule(source, filter, true, type.label().get());
     }
 
-    private static int killByType(CommandContext<CommandSourceStack> context, Holder.Reference<EntityType<?>> holder) throws CommandSyntaxException {
-        CommandSourceStack source = context.getSource();
-        ServerLevel level = source.getLevel();
-        CommandResults.player(source);
+    private static int killByType(CommandContext<CommandSourceStack> context, Holder.Reference<EntityType<?>> holder) {
         EntityType<?> type = holder.value();
-        Component typeName = type.getDescription();
-        Component dimension = Component.literal(level.dimension().identifier().toString());
-        source.sendSuccess(() -> Messages.KILL_START_BYPASS.get(typeName, dimension), true);
-
-        int killed;
-        if (type == EntityType.PLAYER) {
-            killed = killPlayers(level, player -> true);
-        } else {
-            killed = removeEntities(level, entity -> entity.getType() == type, false);
-        }
-        return report(source, killed, typeName);
+        return schedule(context.getSource(), entity -> entity.getType() == type, false, type.getDescription());
     }
 
-    private static int report(CommandSourceStack source, int killed, Component typeName) {
-        if (killed == 0) {
-            source.sendSuccess(() -> Messages.KILL_NONE.get(typeName), true);
-            return 0;
-        }
-        return CommandResults.broadcast(source, Messages.KILL_DONE.get(killed), killed);
-    }
-
-    private static int killPlayers(ServerLevel level, Predicate<ServerPlayer> filter) {
-        int killed = 0;
-        for (ServerPlayer player : new ArrayList<>(level.players())) {
-            if (filter.test(player) && !player.isRemoved()) {
+    private static int schedule(CommandSourceStack source, Predicate<Entity> filter, boolean respectProtection, Component typeName) {
+        ServerLevel level = source.getLevel();
+        EntityIndex.Cursor cursor = EntityIndex.cursor(level);
+        AtomicInteger removed = new AtomicInteger();
+        Run run = new Run(source, "entity removal", level.dimension());
+        run.repeat(() -> cursor.step(128, entity -> {
+            if (!filter.test(entity) || respectProtection && entity.is(MATags.KILL_PROTECTED)) return;
+            if (entity instanceof ServerPlayer player) {
+                if (!player.isAlive()) return;
                 player.kill(level);
-                killed++;
-            }
-        }
-        return killed;
-    }
-
-    private static int removeEntities(ServerLevel level, Predicate<Entity> filter, boolean respectProtection) {
-        List<Entity> entities = new ArrayList<>();
-        level.getAllEntities().forEach(entities::add);
-        int removed = 0;
-        for (Entity entity : entities) {
-            if (entity.isRemoved() || entity instanceof Player) {
-                continue;
-            }
-            if (respectProtection && entity.is(MATags.KILL_PROTECTED)) {
-                continue;
-            }
-            if (filter.test(entity)) {
+            } else {
                 entity.remove(Entity.RemovalReason.KILLED);
-                removed++;
             }
-        }
-        return removed;
+            removed.incrementAndGet();
+        }));
+        run.onComplete(finished -> finished.message(removed.get() == 0
+                ? Messages.KILL_NONE.get(typeName) : Messages.KILL_DONE.get(removed.get())));
+        if (!RunScheduler.tryStart(run)) return 0;
+        run.message((respectProtection ? Messages.KILL_START : Messages.KILL_START_BYPASS)
+                .get(typeName, level.dimension().identifier()));
+        return 1;
     }
 }
