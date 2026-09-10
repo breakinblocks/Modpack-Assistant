@@ -85,14 +85,14 @@ public final class ScanOresCommand {
 
         Run run = new Run(source, "ore scan", level.dimension());
         for (ChunkPos chunk : region.chunks()) {
-            run.job(() -> ChunkAccessor.withChunk(level, chunk, loaded -> {
-                scan.scanChunk(loaded, chunk);
-                return null;
-            }));
+            run.job(() -> ChunkAccessor.withLoadedChunk(level, chunk, loaded -> scan.scanChunk(loaded, chunk)));
         }
         int finalMin = minY;
         int finalMax = maxY;
         run.onComplete(finished -> {
+            int skipped = region.chunkCount() - scan.chunksScanned();
+            reportContext.note("chunks_scanned", scan.chunksScanned()).note("chunks_skipped_unloaded", skipped);
+            if (skipped > 0) finished.message(Messages.SCAN_SKIPPED.get(skipped));
             printChat(finished, scan, region, finalMin, finalMax);
             writeReports(finished, scan, reportContext);
         });
@@ -101,7 +101,7 @@ public final class ScanOresCommand {
             return 0;
         }
         run.message(Messages.SCAN_START.get(region.spanText(), region.chunkCount(), minY, maxY));
-        RegionCommands.reportUnloaded(run, level, region);
+        run.message(Messages.SCAN_LOADED_ONLY.get());
         return run.total();
     }
 

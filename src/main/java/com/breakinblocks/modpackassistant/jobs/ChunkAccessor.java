@@ -8,6 +8,7 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.function.Function;
+import java.util.function.Consumer;
 
 public final class ChunkAccessor {
     private static final TicketType<ChunkPos> TICKET = TicketType.create("modpackassistant", Comparator.comparingLong(ChunkPos::toLong));
@@ -16,7 +17,16 @@ public final class ChunkAccessor {
     }
 
     public static boolean isLoaded(ServerLevel level, ChunkPos pos) {
-        return level.getChunkSource().hasChunk(pos.x, pos.z);
+        return level.getChunkSource().getChunkNow(pos.x, pos.z) != null;
+    }
+
+    public static boolean withLoadedChunk(ServerLevel level, ChunkPos pos, Consumer<LevelChunk> action) {
+        LevelChunk chunk = level.getChunkSource().getChunkNow(pos.x, pos.z);
+        if (chunk == null) {
+            return false;
+        }
+        action.accept(chunk);
+        return true;
     }
 
     public static int countUnloaded(ServerLevel level, Collection<ChunkPos> chunks) {

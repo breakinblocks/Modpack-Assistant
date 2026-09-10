@@ -2,6 +2,7 @@ package com.breakinblocks.modpackassistant.commands.analysis;
 
 import com.breakinblocks.modpackassistant.analysis.LootContexts;
 import com.breakinblocks.modpackassistant.analysis.LootSimulator;
+import com.breakinblocks.modpackassistant.analysis.LootSafety;
 import com.breakinblocks.modpackassistant.commands.CommandResults;
 import com.breakinblocks.modpackassistant.commands.MAPermissions;
 import com.breakinblocks.modpackassistant.config.MAConfig;
@@ -73,13 +74,21 @@ public final class SimulateLootCommand {
                 .note("loot_table", tableId)
                 .note("iterations", iterations)
                 .note("luck", luck)
-                .note("param_set", String.valueOf(table.getParamSet()));
+                .note("param_set", String.valueOf(table.getParamSet()))
+                .note("unevaluated_rules", "global loot modifiers; unsupported functions, predicates and providers are rejected before rolling")
+                .note("assumptions", "independent random source; live world conditions are not advanced between rolls");
 
         Run run = new Run(source, "loot simulation", level.dimension());
-        int jobs = (iterations + LootSimulator.BATCH - 1) / LootSimulator.BATCH;
-        for (int i = 0; i < jobs; i++) {
-            run.job(simulator::rollBatch);
-        }
+        LootSafety safety = new LootSafety(level, key, luck);
+        run.repeat(() -> {
+            if (!safety.step()) return false;
+            run.repeat(() -> {
+                safety.verifyCurrent();
+                simulator.rollBatch(safety.rollsPerBatch());
+                return simulator.rolled() >= iterations;
+            });
+            return true;
+        });
         run.onComplete(finished -> {
             finished.message(Messages.LOOT_HEADER.get(tableId, simulator.rolled(), PERCENT.format(simulator.emptyPercent())).withStyle(ChatFormatting.GREEN));
             List<LootSimulator.Stat> ranked = simulator.ranked();

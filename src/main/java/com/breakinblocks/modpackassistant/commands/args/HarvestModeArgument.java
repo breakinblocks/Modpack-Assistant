@@ -3,15 +3,18 @@ package com.breakinblocks.modpackassistant.commands.args;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.serialization.Codec;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.commands.arguments.StringRepresentableArgument;
-import net.minecraft.core.registries.Registries;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import java.util.concurrent.CompletableFuture;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.util.StringRepresentable;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.Enchantments;
 import org.jetbrains.annotations.Nullable;
 
-public final class HarvestModeArgument extends StringRepresentableArgument<HarvestModeArgument.HarvestMode> {
+public final class HarvestModeArgument {
     public enum HarvestMode implements StringRepresentable {
         PLAIN("plain", null, 0),
         SILK_TOUCH("silk_touch", Enchantments.SILK_TOUCH, 1),
@@ -47,15 +50,17 @@ public final class HarvestModeArgument extends StringRepresentableArgument<Harve
         }
     }
 
-    public HarvestModeArgument() {
-        super(HarvestMode.CODEC, HarvestMode::values);
+    private HarvestModeArgument() {}
+
+    public static StringArgumentType harvestMode() {
+        return StringArgumentType.word();
     }
 
-    public static HarvestModeArgument harvestMode() {
-        return new HarvestModeArgument();
+    public static CompletableFuture<Suggestions> suggest(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        return MAArguments.suggest(HarvestMode.values(), builder);
     }
 
-    public static HarvestMode get(CommandContext<CommandSourceStack> context, String name) {
-        return context.getArgument(name, HarvestMode.class);
+    public static HarvestMode get(CommandContext<CommandSourceStack> context, String name) throws CommandSyntaxException {
+        return MAArguments.get(context, name, HarvestMode.values());
     }
 }

@@ -19,7 +19,6 @@ import net.minecraft.world.entity.SpawnPlacements;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.MobSpawnSettings;
-import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec3;
 
@@ -33,7 +32,7 @@ import java.util.Map;
 import java.util.Optional;
 
 public final class SpawnSimulator {
-    public static final int TICKS_PER_JOB = 50;
+    public static final int TICKS_PER_JOB = 1;
     private static final int PASSIVE_INTERVAL = 400;
     private static final int MAGIC_CHUNKS = 17 * 17;
     private static final double MIN_PLAYER_DISTANCE_SQ = 24.0D * 24.0D;
@@ -41,7 +40,7 @@ public final class SpawnSimulator {
     private static final int DESPAWN_CHANCE = 800;
     private static final int GROUP_ATTEMPTS = 3;
     private static final int DEFAULT_CLUSTER = 4;
-    public static final List<String> SKIPPED_RULES = List.of("MobSpawnEvent.PositionCheck", "MobSpawnEvent.FinalizeSpawn", "structure spawn overrides outside nether fortresses");
+    public static final List<String> SKIPPED_RULES = List.of("MobSpawnEvent.PositionCheck", "MobSpawnEvent.FinalizeSpawn", "structure spawn overrides", "unloaded chunks and candidates without a loaded 32-block neighborhood");
 
     public static final class TypeStat {
         public final EntityType<?> type;
@@ -74,7 +73,6 @@ public final class SpawnSimulator {
     private final Map<EntityType<?>, TypeStat> typeStats = new HashMap<>();
     private final EnumMap<MobCategory, CategoryStat> categoryStats = new EnumMap<>(MobCategory.class);
     private final List<VirtualEntity> population = new ArrayList<>();
-    private final ChunkGenerator generator;
     private int tick;
 
     public SpawnSimulator(ServerLevel level, Holder<Biome> biome, List<ChunkPos> chunks, Vec3 playerPos, int totalTicks) {
@@ -83,10 +81,13 @@ public final class SpawnSimulator {
         this.chunks = chunks;
         this.playerPos = playerPos;
         this.totalTicks = totalTicks;
-        this.generator = level.getChunkSource().getGenerator();
         for (MobCategory category : MobCategory.values()) {
             categoryStats.put(category, new CategoryStat());
         }
+    }
+
+    public boolean complete() {
+        return tick >= totalTicks;
     }
 
     public int totalTicks() {
@@ -132,7 +133,9 @@ public final class SpawnSimulator {
     }
 
     private void spawnCategoryForChunk(MobCategory category, ChunkPos chunk, CategoryStat categoryStat) {
+        if (level.getChunkSource().getChunkNow(chunk.x, chunk.z) == null) return;
         BlockPos pos = randomPositionWithin(chunk);
+        if (!loadedNeighborhood(pos)) return;
         if (level.getBlockState(pos).isRedstoneConductor(level, pos)) {
             return;
         }
@@ -143,13 +146,13 @@ public final class SpawnSimulator {
         int spawnedThisChunk = 0;
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         for (int attempt = 0; attempt < GROUP_ATTEMPTS; attempt++) {
-            WeightedRandomList<MobSpawnSettings.SpawnerData> potential = generator.getMobsAt(biome, level.structureManager(), category, pos);
+            WeightedRandomList<MobSpawnSettings.SpawnerData> potential = biome.value().getMobSettings().getMobs(category);
             Optional<MobSpawnSettings.SpawnerData> picked = potential.getRandom(random);
             if (picked.isEmpty()) {
                 return;
             }
             MobSpawnSettings.SpawnerData data = picked.get();
-            int groupSize = Mth.ceil(random.nextFloat() * 4.0F);
+            int groupSize = groupSize(data, random);
             int clusterLimit = DEFAULT_CLUSTER;
             boolean packSpawned = false;
             cursor.set(pos);
@@ -190,6 +193,7 @@ public final class SpawnSimulator {
     }
 
     private boolean isValidPosition(MobCategory category, MobSpawnSettings.SpawnerData data, BlockPos pos, double distanceSq) {
+        if (distanceSq <= MIN_PLAYER_DISTANCE_SQ || !loadedNeighborhood(pos)) return false;
         EntityType<?> type = data.type;
         if (type.getCategory() == MobCategory.MISC || !type.canSummon()) {
             return false;
@@ -221,7 +225,7 @@ public final class SpawnSimulator {
     private BlockPos randomPositionWithin(ChunkPos chunk) {
         int x = chunk.getMinBlockX() + random.nextInt(16);
         int z = chunk.getMinBlockZ() + random.nextInt(16);
-        LevelChunk loaded = level.getChunk(chunk.x, chunk.z);
+        LevelChunk loaded = java.util.Objects.requireNonNull(level.getChunkSource().getChunkNow(chunk.x, chunk.z));
         int highest = loaded.getHighestFilledSectionIndex();
         int top = highest == -1
                 ? level.getMinBuildHeight()
@@ -244,6 +248,19 @@ public final class SpawnSimulator {
         }
     }
 
+    public static int groupSize(MobSpawnSettings.SpawnerData data, RandomSource random) {
+        return data.minCount + random.nextInt(data.maxCount - data.minCount + 1);
+    }
+
+    private boolean loadedNeighborhood(BlockPos pos) {
+        for (int x = (pos.getX() - 32) >> 4; x <= (pos.getX() + 32) >> 4; x++) {
+            for (int z = (pos.getZ() - 32) >> 4; z <= (pos.getZ() + 32) >> 4; z++) {
+                if (level.getChunkSource().getChunkNow(x, z) == null) return false;
+            }
+        }
+        return true;
+    }
+
     public List<TypeStat> rankedTypes() {
         List<TypeStat> list = new ArrayList<>(typeStats.values());
         list.sort(Comparator.comparingInt((TypeStat stat) -> stat.individuals).reversed().thenComparing(stat -> BuiltInRegistries.ENTITY_TYPE.getKey(stat.type).toString()));
@@ -260,7 +277,7 @@ public final class SpawnSimulator {
 
     public String csv(ReportWriter.Context context) {
         CsvWriter csv = new CsvWriter().comments(context.headerLines())
-                .comment("assumptions: the caller is the only player; sampled chunks are the loaded chunks whose surface biome matches; despawning uses the vanilla 1 in 800 per tick rule after 600 ticks for non-persistent categories")
+                .comment("assumptions: the caller is the only player; sampled chunks are the loaded chunks whose surface biome matches; pack attempts use the declared inclusive min/max range and cluster limits; live world time and weather are not advanced; despawning uses the vanilla 1 in 800 per tick rule after 600 ticks for non-persistent categories")
                 .comment("skipped rules: " + String.join("; ", SKIPPED_RULES));
         csv.row("section", "entity_type", "category", "attempts", "individuals", "share_of_category_percent", "mean_pack_size");
         for (TypeStat stat : rankedTypes()) {

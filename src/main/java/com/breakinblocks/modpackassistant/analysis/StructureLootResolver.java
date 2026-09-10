@@ -1,12 +1,12 @@
 package com.breakinblocks.modpackassistant.analysis;
 
-import com.google.gson.JsonArray;
+import com.breakinblocks.modpackassistant.config.MAConfig;
+import com.breakinblocks.modpackassistant.util.Messages;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.JsonOps;
 import net.minecraft.core.Holder;
-import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -17,137 +17,136 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
-import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.level.storage.loot.LootTable;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 public final class StructureLootResolver {
-    public record Found(ResourceKey<LootTable> table, boolean confirmed) {
-    }
-
+    public record Found(ResourceKey<LootTable> table, boolean confirmed) {}
     public record Result(List<Found> tables, List<String> tried) {
-        public boolean isEmpty() {
-            return tables.isEmpty();
-        }
+        public boolean isEmpty() { return tables.isEmpty(); }
     }
 
-    private StructureLootResolver() {
+    private final ServerLevel level;
+    private final Holder.Reference<Structure> structure;
+    private final DynamicOps<JsonElement> ops;
+    private final ArrayDeque<ResourceLocation> pools = new ArrayDeque<>();
+    private final ArrayDeque<ResourceLocation> templates = new ArrayDeque<>();
+    private final ArrayDeque<JsonElement> json = new ArrayDeque<>();
+    private final Set<ResourceLocation> visitedPools = new HashSet<>();
+    private final Set<ResourceLocation> visitedTemplates = new HashSet<>();
+    private final Set<ResourceLocation> visitedTables = new HashSet<>();
+    private final List<Found> found = new ArrayList<>();
+    private final List<String> tried = new ArrayList<>();
+    private final int resourceLimit = Math.min(4096, MAConfig.maxStructureLootChests() * 16);
+    private Iterator<ResourceLocation> heuristic;
+    private ListTag blocks;
+    private int blockIndex;
+    private int nodes;
+    private boolean initialized;
+
+    public StructureLootResolver(ServerLevel level, Holder.Reference<Structure> structure) {
+        this.level = level;
+        this.structure = structure;
+        ops = RegistryOps.create(JsonOps.INSTANCE, level.registryAccess());
     }
 
-    public static Result resolve(ServerLevel level, Holder.Reference<Structure> structure) {
-        List<String> tried = new ArrayList<>();
-        Set<ResourceLocation> templates = new LinkedHashSet<>();
-        DynamicOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, level.registryAccess());
-
-        JsonElement encoded = Structure.DIRECT_CODEC.encodeStart(ops, structure.value()).result().orElse(null);
-        if (encoded != null && encoded.isJsonObject() && encoded.getAsJsonObject().has("start_pool")) {
-            tried.add("template pools");
-            Registry<StructureTemplatePool> pools = level.registryAccess().registryOrThrow(Registries.TEMPLATE_POOL);
-            Set<ResourceLocation> visitedPools = new LinkedHashSet<>();
-            walkPool(level, pools, ops, ResourceLocation.parse(encoded.getAsJsonObject().get("start_pool").getAsString()), visitedPools, templates);
+    public boolean step() {
+        if (!initialized) {
+            initialized = true;
+            JsonElement encoded = Structure.DIRECT_CODEC.encodeStart(ops, structure.value()).getOrThrow();
+            if (encoded.isJsonObject() && encoded.getAsJsonObject().has("start_pool")) {
+                JsonElement pool = encoded.getAsJsonObject().get("start_pool");
+                tried.add("template pools and template block entities");
+                if (pool.isJsonPrimitive()) addPool(ResourceLocation.parse(pool.getAsString()));
+                else json.add(pool);
+            }
+            return false;
         }
-
-        Set<ResourceKey<LootTable>> confirmed = new LinkedHashSet<>();
-        if (!templates.isEmpty()) {
-            tried.add("template block entities (" + templates.size() + " templates)");
-            for (ResourceLocation id : templates) {
-                Optional<StructureTemplate> template = level.getStructureManager().get(id);
-                template.ifPresent(value -> collectLootTables(value, confirmed));
+        for (int i = 0; i < 128; i++) {
+            if (!json.isEmpty()) {
+                inspect(json.remove());
+            } else if (blocks != null && blockIndex < blocks.size()) {
+                CompoundTag nbt = blocks.getCompound(blockIndex++).getCompound("nbt");
+                if (nbt.contains("pool", Tag.TAG_STRING)) addPool(ResourceLocation.parse(nbt.getString("pool")));
+                if (nbt.contains("LootTable", Tag.TAG_STRING)) addTable(ResourceLocation.parse(nbt.getString("LootTable")), true);
+            } else {
+                blocks = null;
+                if (!pools.isEmpty()) {
+                    StructureTemplatePool pool = level.registryAccess().registryOrThrow(Registries.TEMPLATE_POOL).get(pools.remove());
+                    if (pool != null) json.add(StructureTemplatePool.DIRECT_CODEC.encodeStart(ops, pool).getOrThrow());
+                    return false;
+                }
+                if (!templates.isEmpty()) {
+                    var template = level.getStructureManager().get(templates.remove());
+                    if (template.isPresent()) {
+                        var size = template.get().getSize();
+                        if ((long) size.getX() * size.getY() * size.getZ() > MAConfig.maxDrainBlocks()) throw tooComplex();
+                        blocks = template.get().save(new CompoundTag()).getList("blocks", Tag.TAG_COMPOUND);
+                        blockIndex = 0;
+                    }
+                    return false;
+                }
+                if (!found.isEmpty() && heuristic == null) return true;
+                if (heuristic == null) {
+                    tried.add("loot table ids matching the structure path");
+                    heuristic = level.getServer().reloadableRegistries().getKeys(Registries.LOOT_TABLE).iterator();
+                }
+                if (!heuristic.hasNext()) return true;
+                ResourceLocation table = heuristic.next();
+                ResourceLocation key = structure.key().location();
+                if (table.getNamespace().equals(key.getNamespace()) && table.getPath().contains(key.getPath())) addTable(table, false);
             }
         }
+        return false;
+    }
 
-        List<Found> found = new ArrayList<>();
-        confirmed.forEach(key -> found.add(new Found(key, true)));
-        if (found.isEmpty()) {
-            tried.add("loot table ids matching the structure path");
-            ResourceLocation key = structure.key().location();
-            for (ResourceLocation tableId : level.getServer().reloadableRegistries().getKeys(Registries.LOOT_TABLE)) {
-                if (tableId.getNamespace().equals(key.getNamespace()) && tableId.getPath().contains(key.getPath())) {
-                    found.add(new Found(ResourceKey.create(Registries.LOOT_TABLE, tableId), false));
+    private void inspect(JsonElement element) {
+        if (++nodes > resourceLimit * 256) throw tooComplex();
+        if (element.isJsonArray()) {
+            element.getAsJsonArray().forEach(json::add);
+        } else if (element.isJsonObject()) {
+            JsonObject object = element.getAsJsonObject();
+            if (object.has("fallback") && object.get("fallback").isJsonPrimitive()) addPool(ResourceLocation.parse(object.get("fallback").getAsString()));
+            if (object.has("location") && object.get("location").isJsonPrimitive()) {
+                ResourceLocation template = ResourceLocation.parse(object.get("location").getAsString());
+                if (visitedTemplates.add(template)) {
+                    if (visitedTemplates.size() > resourceLimit) throw tooComplex();
+                    templates.add(template);
                 }
             }
-        }
-        return new Result(found, tried);
-    }
-
-    private static void walkPool(ServerLevel level, Registry<StructureTemplatePool> pools, DynamicOps<JsonElement> ops, ResourceLocation poolId, Set<ResourceLocation> visited, Set<ResourceLocation> templates) {
-        if (!visited.add(poolId)) {
-            return;
-        }
-        StructureTemplatePool pool = pools.get(poolId);
-        if (pool == null) {
-            return;
-        }
-        JsonElement encoded = StructureTemplatePool.DIRECT_CODEC.encodeStart(ops, pool).result().orElse(null);
-        if (encoded == null || !encoded.isJsonObject()) {
-            return;
-        }
-        JsonObject object = encoded.getAsJsonObject();
-        if (object.has("fallback")) {
-            walkPool(level, pools, ops, ResourceLocation.parse(object.get("fallback").getAsString()), visited, templates);
-        }
-        if (object.has("elements")) {
-            for (JsonElement weighted : object.getAsJsonArray("elements")) {
-                if (weighted.isJsonObject() && weighted.getAsJsonObject().has("element")) {
-                    collectElement(weighted.getAsJsonObject().get("element"), templates);
-                }
+            for (var entry : object.entrySet()) {
+                if (entry.getValue().isJsonObject() || entry.getValue().isJsonArray()) json.add(entry.getValue());
             }
         }
-        for (ResourceLocation template : new ArrayList<>(templates)) {
-            Optional<StructureTemplate> loaded = level.getStructureManager().get(template);
-            loaded.ifPresent(value -> collectJigsawPools(value).forEach(next -> walkPool(level, pools, ops, next, visited, templates)));
+        if (json.size() > resourceLimit * 256) throw tooComplex();
+    }
+
+    private void addPool(ResourceLocation pool) {
+        if (visitedPools.add(pool)) {
+            if (visitedPools.size() > resourceLimit) throw tooComplex();
+            pools.add(pool);
         }
     }
 
-    private static void collectElement(JsonElement element, Set<ResourceLocation> templates) {
-        if (!element.isJsonObject()) {
-            return;
-        }
-        JsonObject object = element.getAsJsonObject();
-        if (object.has("location")) {
-            templates.add(ResourceLocation.parse(object.get("location").getAsString()));
-        }
-        if (object.has("elements")) {
-            JsonArray nested = object.getAsJsonArray("elements");
-            for (JsonElement child : nested) {
-                collectElement(child, templates);
-            }
+    private void addTable(ResourceLocation table, boolean confirmed) {
+        if (visitedTables.add(table)) {
+            if (found.size() >= MAConfig.maxStructureLootChests()) throw tooComplex();
+            found.add(new Found(ResourceKey.create(Registries.LOOT_TABLE, table), confirmed));
         }
     }
 
-    private static List<ResourceLocation> collectJigsawPools(StructureTemplate template) {
-        List<ResourceLocation> pools = new ArrayList<>();
-        for (CompoundTag nbt : blockEntityTags(template)) {
-            if (nbt.contains("pool", Tag.TAG_STRING)) {
-                pools.add(ResourceLocation.parse(nbt.getString("pool")));
-            }
-        }
-        return pools;
+    public Result result() {
+        return new Result(List.copyOf(found), List.copyOf(tried));
     }
 
-    private static void collectLootTables(StructureTemplate template, Set<ResourceKey<LootTable>> tables) {
-        for (CompoundTag nbt : blockEntityTags(template)) {
-            if (nbt.contains("LootTable", Tag.TAG_STRING)) {
-                tables.add(ResourceKey.create(Registries.LOOT_TABLE, ResourceLocation.parse(nbt.getString("LootTable"))));
-            }
-        }
-    }
-
-    private static List<CompoundTag> blockEntityTags(StructureTemplate template) {
-        List<CompoundTag> tags = new ArrayList<>();
-        CompoundTag saved = template.save(new CompoundTag());
-        ListTag blocks = saved.getList("blocks", Tag.TAG_COMPOUND);
-        for (int i = 0; i < blocks.size(); i++) {
-            CompoundTag block = blocks.getCompound(i);
-            if (block.contains("nbt", Tag.TAG_COMPOUND)) {
-                tags.add(block.getCompound("nbt"));
-            }
-        }
-        return tags;
+    private IllegalArgumentException tooComplex() {
+        return new IllegalArgumentException(Messages.STRUCTLOOT_COMPLEX.get(resourceLimit, MAConfig.maxDrainBlocks(),
+                MAConfig.maxStructureLootChests()).getString());
     }
 }

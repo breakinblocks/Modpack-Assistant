@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.UUID;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -103,7 +105,7 @@ public final class ReportWriter {
 
     public static Path file(Family family, String subject, String extension) {
         String stamp = STAMP.format(ZonedDateTime.now(ZoneOffset.UTC));
-        return directory(family).resolve(sanitize(subject) + "-" + stamp + "." + extension);
+        return directory(family).resolve(sanitize(subject) + "-" + stamp + "-" + UUID.randomUUID() + "." + extension);
     }
 
     public static String sanitize(String subject) {
@@ -113,12 +115,12 @@ public final class ReportWriter {
 
     public static void writeLines(Path path, List<String> lines) throws IOException {
         Files.createDirectories(path.getParent());
-        Files.write(path, lines, StandardCharsets.UTF_8);
+        Files.write(path, lines, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
     }
 
     public static void writeString(Path path, String content) throws IOException {
         Files.createDirectories(path.getParent());
-        Files.writeString(path, content, StandardCharsets.UTF_8);
+        Files.writeString(path, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
     }
 
     public static String relative(Path path) {

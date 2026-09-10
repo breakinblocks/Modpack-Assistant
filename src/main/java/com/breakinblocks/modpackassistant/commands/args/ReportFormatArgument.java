@@ -3,10 +3,14 @@ package com.breakinblocks.modpackassistant.commands.args;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.serialization.Codec;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.commands.arguments.StringRepresentableArgument;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import java.util.concurrent.CompletableFuture;
 import net.minecraft.util.StringRepresentable;
 
-public final class ReportFormatArgument extends StringRepresentableArgument<ReportFormatArgument.ReportFormat> {
+public final class ReportFormatArgument {
     public enum ReportFormat implements StringRepresentable {
         JSON("json"),
         CSV("csv");
@@ -25,15 +29,17 @@ public final class ReportFormatArgument extends StringRepresentableArgument<Repo
         }
     }
 
-    public ReportFormatArgument() {
-        super(ReportFormat.CODEC, ReportFormat::values);
+    private ReportFormatArgument() {}
+
+    public static StringArgumentType reportFormat() {
+        return StringArgumentType.word();
     }
 
-    public static ReportFormatArgument reportFormat() {
-        return new ReportFormatArgument();
+    public static CompletableFuture<Suggestions> suggest(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        return MAArguments.suggest(ReportFormat.values(), builder);
     }
 
-    public static ReportFormat get(CommandContext<CommandSourceStack> context, String name) {
-        return context.getArgument(name, ReportFormat.class);
+    public static ReportFormat get(CommandContext<CommandSourceStack> context, String name) throws CommandSyntaxException {
+        return MAArguments.get(context, name, ReportFormat.values());
     }
 }

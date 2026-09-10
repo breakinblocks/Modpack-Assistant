@@ -1,29 +1,35 @@
 package com.breakinblocks.modpackassistant.commands.args;
 
-import com.breakinblocks.modpackassistant.ModpackAssistant;
-import com.mojang.brigadier.arguments.ArgumentType;
-import net.minecraft.commands.synchronization.ArgumentTypeInfo;
-import net.minecraft.commands.synchronization.ArgumentTypeInfos;
-import net.minecraft.commands.synchronization.SingletonArgumentInfo;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.neoforged.neoforge.registries.DeferredHolder;
-import net.neoforged.neoforge.registries.DeferredRegister;
+import com.breakinblocks.modpackassistant.util.Messages;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.util.StringRepresentable;
 
-import java.util.function.Supplier;
+import java.util.Arrays;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 public final class MAArguments {
-    public static final DeferredRegister<ArgumentTypeInfo<?, ?>> ARGUMENT_TYPES = DeferredRegister.create(BuiltInRegistries.COMMAND_ARGUMENT_TYPE, ModpackAssistant.MOD_ID);
+    private MAArguments() {}
 
-    public static final DeferredHolder<ArgumentTypeInfo<?, ?>, SingletonArgumentInfo<KillTypeArgument>> KILL_TYPE = singleton("kill_type", KillTypeArgument.class, KillTypeArgument::new);
-    public static final DeferredHolder<ArgumentTypeInfo<?, ?>, SingletonArgumentInfo<HarvestModeArgument>> HARVEST_MODE = singleton("harvest_mode", HarvestModeArgument.class, HarvestModeArgument::new);
-    public static final DeferredHolder<ArgumentTypeInfo<?, ?>, SingletonArgumentInfo<RegistryKindArgument>> REGISTRY_KIND = singleton("registry_kind", RegistryKindArgument.class, RegistryKindArgument::new);
-    public static final DeferredHolder<ArgumentTypeInfo<?, ?>, SingletonArgumentInfo<ReportFormatArgument>> REPORT_FORMAT = singleton("report_format", ReportFormatArgument.class, ReportFormatArgument::new);
-    public static final DeferredHolder<ArgumentTypeInfo<?, ?>, SingletonArgumentInfo<ClearKeepArgument>> CLEAR_KEEP = singleton("clear_keep", ClearKeepArgument.class, ClearKeepArgument::new);
-
-    private MAArguments() {
+    public static <E extends Enum<E> & StringRepresentable> E get(CommandContext<CommandSourceStack> context, String name, E[] values) throws CommandSyntaxException {
+        String input = StringArgumentType.getString(context, name);
+        for (E value : values) {
+            if (value.getSerializedName().equals(input)) {
+                return value;
+            }
+        }
+        throw new SimpleCommandExceptionType(Messages.INVALID_ENUM.get(input,
+                Arrays.stream(values).map(StringRepresentable::getSerializedName).collect(Collectors.joining(", ")))).create();
     }
 
-    private static <A extends ArgumentType<?>> DeferredHolder<ArgumentTypeInfo<?, ?>, SingletonArgumentInfo<A>> singleton(String name, Class<A> type, Supplier<A> factory) {
-        return ARGUMENT_TYPES.register(name, () -> ArgumentTypeInfos.registerByClass(type, SingletonArgumentInfo.contextFree(factory)));
+    public static <E extends Enum<E> & StringRepresentable> CompletableFuture<Suggestions> suggest(E[] values, SuggestionsBuilder builder) {
+        return SharedSuggestionProvider.suggest(Arrays.stream(values).map(StringRepresentable::getSerializedName), builder);
     }
 }

@@ -1,6 +1,9 @@
 package com.breakinblocks.modpackassistant.commands.world;
 
+import com.breakinblocks.modpackassistant.commands.items.ItemStrings;
+import java.util.concurrent.atomic.AtomicInteger;
 import com.breakinblocks.modpackassistant.commands.CommandResults;
+import com.breakinblocks.modpackassistant.analysis.DropAccumulator;
 import com.breakinblocks.modpackassistant.commands.MAPermissions;
 import com.breakinblocks.modpackassistant.commands.args.HarvestModeArgument;
 import com.breakinblocks.modpackassistant.commands.args.HarvestModeArgument.HarvestMode;
@@ -15,13 +18,11 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
-import it.unimi.dsi.fastutil.objects.Object2LongOpenHashMap;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
@@ -29,7 +30,6 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
@@ -40,10 +40,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.common.Tags;
 
 import java.text.DecimalFormat;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 
 public final class MineAreaCommand {
     private static final DecimalFormat GROUPED = new DecimalFormat("#,###");
@@ -59,7 +56,7 @@ public final class MineAreaCommand {
                 .requires(MAPermissions.GAMEMASTER)
                 .then(Commands.argument("radius", IntegerArgumentType.integer(0))
                         .executes(context -> mine(context, HarvestMode.FORTUNE_3))
-                        .then(Commands.argument("harvest", HarvestModeArgument.harvestMode())
+                        .then(Commands.argument("harvest", HarvestModeArgument.harvestMode()).suggests(HarvestModeArgument::suggest)
                                 .executes(context -> mine(context, HarvestModeArgument.get(context, "harvest")))));
     }
 
@@ -79,79 +76,71 @@ public final class MineAreaCommand {
             EnchantmentHelper.updateEnchantments(tool, mutable -> mutable.set(holder, mode.level()));
         }
 
-        Object2LongOpenHashMap<Item> drops = new Object2LongOpenHashMap<>();
+        DropAccumulator drops = new DropAccumulator();
+        AtomicInteger scanned = new AtomicInteger();
+        Direction facing = player.getDirection();
+        BlockPos barrelOrigin = player.blockPosition().relative(facing);
         int minY = RegionGeometry.minY(level);
         int maxY = RegionGeometry.maxY(level);
         Run run = new Run(source, "mining simulation", level.dimension());
         for (ChunkPos chunk : region.chunks()) {
-            run.job(() -> ChunkAccessor.withChunk(level, chunk, loaded -> {
+            run.job(() -> ChunkAccessor.withLoadedChunk(level, chunk, loaded -> {
+                scanned.incrementAndGet();
                 RegionGeometry.forEachBlock(chunk, minY, maxY, false, pos -> {
                     BlockState state = loaded.getBlockState(pos);
                     if (state.isAir() || state.is(Blocks.BEDROCK) || !state.is(Tags.Blocks.ORES)) {
                         return;
                     }
                     for (ItemStack drop : Block.getDrops(state, level, pos, level.getBlockEntity(pos), player, tool)) {
-                        drops.addTo(drop.getItem(), drop.getCount());
+                        drops.add(drop);
                     }
                 });
-                return null;
             }));
         }
         run.onComplete(finished -> {
             printSummary(finished, drops, mode);
-            placeBarrels(finished, level, player, drops);
+            placeBarrels(finished, level, barrelOrigin, facing, drops);
+            if (scanned.get() < region.chunkCount()) finished.message(Messages.SCAN_SKIPPED.get(region.chunkCount() - scanned.get()));
         });
 
         if (!RunScheduler.tryStart(run)) {
             return 0;
         }
         run.message(Messages.MINE_START.get(mode.getSerializedName(), region.spanText(), region.chunkCount()));
-        RegionCommands.reportUnloaded(run, level, region);
+        run.message(Messages.SCAN_LOADED_ONLY.get());
         return run.total();
     }
 
-    private static List<Map.Entry<Item, Long>> ranked(Object2LongOpenHashMap<Item> drops) {
-        List<Map.Entry<Item, Long>> entries = new ArrayList<>();
-        for (var entry : drops.object2LongEntrySet()) {
-            entries.add(Map.entry(entry.getKey(), entry.getLongValue()));
-        }
-        entries.sort(Comparator.comparingLong((Map.Entry<Item, Long> entry) -> entry.getValue()).reversed());
-        return entries;
-    }
-
-    private static void printSummary(Run run, Object2LongOpenHashMap<Item> drops, HarvestMode mode) {
-        long total = 0;
-        for (long count : drops.values()) {
-            total += count;
-        }
+    private static void printSummary(Run run, DropAccumulator drops, HarvestMode mode) {
+        long total = drops.total();
         if (total == 0) {
             run.message(Messages.MINE_NONE.get().withStyle(ChatFormatting.RED));
             return;
         }
         run.message(Messages.MINE_HEADER.get(mode.getSerializedName(), GROUPED.format(total)).withStyle(ChatFormatting.GREEN));
-        for (Map.Entry<Item, Long> entry : ranked(drops)) {
-            double percent = entry.getValue() * 100.0D / total;
+        List<DropAccumulator.Drop> ranked = drops.ranked();
+        if (ranked.size() > 10) run.message(Messages.MINE_SUMMARY_LIMIT.get(ranked.size()));
+        for (DropAccumulator.Drop entry : ranked.subList(0, Math.min(10, ranked.size()))) {
+            double percent = entry.count() * 100.0D / total;
             run.message(Component.empty()
-                    .append(Component.literal("[" + GROUPED.format(entry.getValue()) + "]").withStyle(Style.EMPTY
+                    .append(Component.literal("[" + GROUPED.format(entry.count()) + "]").withStyle(Style.EMPTY
                             .withColor(ChatFormatting.YELLOW)
                             .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Messages.SCAN_PERCENT.get(PERCENT.format(percent))))))
-                    .append(Component.literal(" " + BuiltInRegistries.ITEM.getKey(entry.getKey())).withStyle(ChatFormatting.WHITE)));
+                    .append(Component.literal(" " + ItemStrings.giveString(entry.stack(), run.source().registryAccess())).withStyle(ChatFormatting.WHITE)));
         }
     }
 
-    private static void placeBarrels(Run run, ServerLevel level, ServerPlayer player, Object2LongOpenHashMap<Item> drops) {
-        List<Map.Entry<Item, Long>> remaining = ranked(drops);
+    private static void placeBarrels(Run run, ServerLevel level, BlockPos origin, Direction facing, DropAccumulator drops) {
+        List<DropAccumulator.Drop> remaining = drops.ranked();
         if (remaining.isEmpty()) {
             return;
         }
-        Direction facing = player.getDirection();
         Direction right = facing.getClockWise();
-        BlockPos origin = player.blockPosition().relative(facing);
         int placed = 0;
         int index = 0;
         long[] left = new long[remaining.size()];
         for (int i = 0; i < left.length; i++) {
-            left[i] = remaining.get(i).getValue();
+            left[i] = remaining.get(i).count();
         }
 
         for (int row = 0; row < GRID_ROWS && index < remaining.size(); row++) {
@@ -166,9 +155,9 @@ public final class MineAreaCommand {
                 }
                 placed++;
                 for (int slot = 0; slot < container.getContainerSize() && index < remaining.size(); slot++) {
-                    Item item = remaining.get(index).getKey();
-                    int take = (int) Math.min(left[index], item.getDefaultMaxStackSize());
-                    container.setItem(slot, new ItemStack(item, take));
+                    ItemStack stack = remaining.get(index).stack();
+                    int take = (int) Math.min(left[index], stack.getMaxStackSize());
+                    container.setItem(slot, stack.copyWithCount(take));
                     left[index] -= take;
                     if (left[index] <= 0) {
                         index++;

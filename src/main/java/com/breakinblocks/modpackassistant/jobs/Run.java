@@ -15,6 +15,7 @@ import java.util.ArrayDeque;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.BooleanSupplier;
 
 public final class Run {
     private static final AtomicInteger IDS = new AtomicInteger();
@@ -30,6 +31,7 @@ public final class Run {
     private int total;
     private int done;
     private int lastDecile;
+    private boolean dynamic;
     private long startedNanos;
     private Consumer<Run> onComplete = run -> {};
     private Consumer<Run> onCancel = run -> {};
@@ -56,6 +58,15 @@ public final class Run {
     public Run onComplete(Consumer<Run> callback) {
         this.onComplete = callback;
         return this;
+    }
+
+    public Run repeat(BooleanSupplier finished) {
+        dynamic = true;
+        return job(() -> {
+            if (!finished.getAsBoolean()) {
+                repeat(finished);
+            }
+        });
     }
 
     public Run onCancel(Consumer<Run> callback) {
@@ -86,6 +97,10 @@ public final class Run {
 
     public CommandSourceStack source() {
         return source;
+    }
+
+    public boolean dynamic() {
+        return dynamic;
     }
 
     public int total() {
@@ -140,6 +155,10 @@ public final class Run {
 
     void markDone() {
         done++;
+        if (dynamic) {
+            if (done == 1 || done % 100 == 0) message(Messages.RUN_PROGRESS_DYNAMIC.get(id, done, remaining()));
+            return;
+        }
         int decile = total == 0 ? 10 : done * 10 / total;
         if (decile > lastDecile && decile < 10) {
             lastDecile = decile;

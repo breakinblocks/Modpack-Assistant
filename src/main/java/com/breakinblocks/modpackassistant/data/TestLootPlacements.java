@@ -82,4 +82,17 @@ public final class TestLootPlacements extends SavedData {
         positions.clear();
         setDirty();
     }
+
+    public void append(ResourceKey<Level> dimension, BlockPos pos) {
+        if (!positions.isEmpty() && !dimension.equals(this.dimension)) throw new IllegalStateException("Placement dimension changed");
+        this.dimension = dimension;
+        positions.add(pos.immutable());
+        setDirty();
+    }
+
+    public void forget(BlockPos pos) {
+        positions.remove(pos);
+        if (positions.isEmpty()) dimension = null;
+        setDirty();
+    }
 }

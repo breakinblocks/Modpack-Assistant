@@ -19,6 +19,9 @@ public final class MANetworking {
     }
 
     public static boolean sendClipboard(ServerPlayer player, String text) {
+        if (text.length() > SetClipboardPayload.MAX_TEXT_LENGTH) {
+            return false;
+        }
         if (!player.connection.hasChannel(SetClipboardPayload.TYPE)) {
             return false;
         }

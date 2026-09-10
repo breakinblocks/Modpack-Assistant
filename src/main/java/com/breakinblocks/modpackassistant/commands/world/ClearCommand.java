@@ -49,7 +49,7 @@ public final class ClearCommand {
                 .then(Commands.argument("radius", IntegerArgumentType.integer(0))
                         .executes(context -> clear(context, keepRule(ClearKeep.ORES), "keep ores", true))
                         .then(Commands.literal("keep")
-                                .then(withBedrockFlag(Commands.argument("keep", ClearKeepArgument.clearKeep()),
+                                .then(withBedrockFlag(Commands.argument("keep", ClearKeepArgument.clearKeep()).suggests(ClearKeepArgument::suggest),
                                         (context, protect) -> clear(context, keepRule(ClearKeepArgument.get(context, "keep")), "keep " + ClearKeepArgument.get(context, "keep").getSerializedName(), protect))))
                         .then(Commands.literal("remove")
                                 .then(withBedrockFlag(Commands.argument("predicate", BlockPredicateArgument.blockPredicate(buildContext)),

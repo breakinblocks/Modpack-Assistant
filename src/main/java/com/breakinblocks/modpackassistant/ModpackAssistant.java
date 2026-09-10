@@ -1,6 +1,5 @@
 package com.breakinblocks.modpackassistant;
 
-import com.breakinblocks.modpackassistant.commands.args.MAArguments;
 import com.breakinblocks.modpackassistant.config.MAConfig;
 import com.mojang.logging.LogUtils;
 import net.minecraft.resources.ResourceLocation;
@@ -21,7 +20,6 @@ public class ModpackAssistant {
     }
 
     public ModpackAssistant(IEventBus eventBus, ModContainer container, Dist dist) {
-        MAArguments.ARGUMENT_TYPES.register(eventBus);
         container.registerConfig(ModConfig.Type.COMMON, MAConfig.SPEC);
     }
 }

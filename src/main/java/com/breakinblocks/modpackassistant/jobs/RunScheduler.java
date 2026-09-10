@@ -32,14 +32,17 @@ public final class RunScheduler {
     public static boolean tryStart(Run run) {
         Run current = active;
         if (current != null) {
-            run.source().sendFailure(Messages.RUN_REFUSED.get(current.ownerName(), current.description(), current.percent(), current.done(), current.total()));
+            run.source().sendFailure(current.dynamic()
+                    ? Messages.RUN_REFUSED_DYNAMIC.get(current.ownerName(), current.description(), current.done())
+                    : Messages.RUN_REFUSED.get(current.ownerName(), current.description(), current.percent(), current.done(), current.total()));
             return false;
         }
         active = run;
         tickCounter = 0;
         run.start();
         long seconds = (long) run.total() * MAConfig.jobIntervalTicks() / 20L;
-        run.message(Messages.RUN_STARTED.get(run.id(), run.description(), run.total(), Run.formatSeconds(seconds)));
+        run.message(run.dynamic() ? Messages.RUN_STARTED_DYNAMIC.get(run.id(), run.description())
+                : Messages.RUN_STARTED.get(run.id(), run.description(), run.total(), Run.formatSeconds(seconds)));
         return true;
     }
 

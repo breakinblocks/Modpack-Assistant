@@ -26,6 +26,18 @@ Admin and player (permission level 2 unless noted):
 | `/ma tpd <dimension> [targets]` | Move entities to another dimension safely |
 | `/ma print <source>`, `/ma hand`, `/ma copy <source> [format]` | Item data to chat or clipboard (permission configurable) |
 
+Plain-text copies (the default for `/ma copy inventory` and other copy sources) leave out the quantity
+for single items, for example `minecraft:stone`. Larger stacks retain it, for example
+`2 minecraft:dirt`.
+
+Clipboard exports are limited to 32,767 characters. Oversized output is rejected with a message;
+copy fewer items or a smaller source. Vanilla clients receive English fallback messages and
+the same command syntax and suggestions as modded clients.
+
+`tpd` searches for dry, supported arrival space near the original X/Z coordinates, including
+passenger clearance. It does not clear blocks. An entity stays where it is if no safe position
+is found within two blocks horizontally and the destination's build height.
+
 World editing:
 
 | Command | Purpose |
@@ -42,7 +54,7 @@ Analysis and reports, all read-only, each writing a file under `logs/modpackassi
 | Command | Purpose |
 |---|---|
 | `/ma scanOres <chunk_radius> [min_y] [max_y]` | Ore distribution by block and by height |
-| `/ma locateBlock <block> <chunk_radius>` | Every placement of one block in a region, nearest first with click-to-teleport coordinates |
+| `/ma locateBlock <block> <chunk_radius>` | Count matching blocks and report the nearest retained matches, with click-to-teleport coordinates |
 | `/ma simulateLoot <iterations> <loot_table> [luck]` | Drop statistics for a loot table |
 | `/ma simulateSpawns <biome> <dimension> <ticks>` | Estimated natural spawning without placing entities |
 | `/ma findConflicts [type]` | Recipes that consume the same inputs |
@@ -53,6 +65,47 @@ Analysis and reports, all read-only, each writing a file under `logs/modpackassi
 
 Long-running operations run as jobs on the server tick, one every few ticks, and only one at a
 time. They report progress and can be stopped with `/ma cancel`.
+
+Region radii are measured in chunks: `0` scans one chunk, and `n` covers `(2n + 1)` chunks per
+side. Ore scans, block searches, and mining simulations only inspect chunks loaded when their
+job runs; skipped chunks are reported. Block searches count every match but retain at most
+`max_locate_results` (default 10,000), keeping the nearest matches. Reports use unique filenames
+and never overwrite an existing report.
+
+`kill` processes at most 128 indexed entities per batch. It works from the console except for
+`kill me`. Types are `all`, `animals`, `monsters`, `items`, `xp`, `players`, and `me`; only the last
+two target players. Every enumerated type respects the protected entity-type tag. The explicit
+`kill by <entity>` form bypasses that tag. Cancellation does not restore removed entities.
+
+Recipe conflict scans compare ingredient assignments, horizontal mirrors, and shaped/shapeless
+overlaps in bounded batches. Special recipes, non-simple custom ingredients, and recipes with
+more than 81 ingredient slots are listed as skipped rather than treated as verified matches.
+
+Loot simulations validate tables and referenced tables, item modifiers, and predicates before
+rolling. Unsafe functions such as `exploration_map`, unverified custom behavior, recursive
+references, and excessive per-roll workloads are rejected. Global loot modifiers are not run.
+Reports record these limitations and the use of an independent random source; simulated rolls
+do not advance world time or weather.
+
+Spawn simulation uses each entry's declared inclusive pack-size range, subject to cluster
+limits. Unloaded chunks and candidates without a loaded 32-block neighborhood are skipped.
+Structure-specific spawn overrides, position-check/finalize-spawn events, and advancing world
+conditions are not simulated; these limitations are recorded in reports.
+
+Mining output retains item components, keeps distinct variants separate, and uses each
+variant's actual maximum stack size when filling barrels. Chat shows the ten largest yields.
+The simulation fails before placing barrels if it exceeds `max_mining_drop_variants` (default
+10,000), preventing randomly generated components from consuming unlimited memory.
+
+Structure loot tests resolve pools/templates, validate and roll loot, and place one chest/sign
+pair per placement job. They attempt at most `max_structure_loot_chests` positions (default
+256); occupied positions count toward that budget. Samples remain limited to 16 per table.
+Resolution is capped at 16 times the chest budget (up to 4,096 pools/templates), the chest
+budget's number of loot tables, and `max_drain_blocks` blocks per template. Unsupported loot
+tables are skipped, and global loot modifiers are not evaluated. Partial placements are
+recorded immediately, so `/ma testStructureLoot clear` can remove them after cancellation or
+failure. Cleanup also runs in cancellable batches; changed blocks other than chests/signs
+are left alone.
 
 ## Configuration
 
