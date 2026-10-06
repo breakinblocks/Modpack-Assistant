@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.21.1-1.0.8
+
+### Added
+
+- `/mpa showoff player <name|UUID>` opens the showoff preview on a player model wearing that
+  player's skin, including outer layers, slim arms and cape. Another name or UUID can be typed into
+  the preview to switch skins.
+- A Limbs panel in the player preview sets pitch, yaw and roll for the head, body, arms and legs,
+  from -180 to 180 degrees each.
+- An equipment popup in the player preview fills the armor and hand slots from a searchable item
+  list. Equipment follows the limb pose and shows in screenshots.
+- `ShowoffClient.capture(...)` renders a structure, entity or player straight to a PNG file
+  without opening the preview, for client mods and tools that make images in bulk. Player
+  captures use the ID `minecraft:mannequin`, take `profile`, `equipment` and `Pose` NBT, and wait
+  for the skin to download. The README has the details.
+
 ## 1.21.1-1.0.7
 
 ### Added

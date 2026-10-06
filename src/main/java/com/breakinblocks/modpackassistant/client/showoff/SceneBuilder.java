@@ -1,6 +1,7 @@
 package com.breakinblocks.modpackassistant.client.showoff;
 
 import com.breakinblocks.modpackassistant.ModpackAssistant;
+import com.breakinblocks.modpackassistant.net.ShowoffOpenPayload;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
@@ -53,22 +54,43 @@ final class SceneBuilder {
 
     private final Minecraft minecraft = Minecraft.getInstance();
     private final ClientLevel level;
+    private final boolean strict;
     private final Map<RenderType, VertexRecorder> layers = new LinkedHashMap<>();
     private final List<BlockEntity> blockEntities = new ArrayList<>();
     private final List<Entity> entities = new ArrayList<>();
     private @Nullable AABB entityBounds;
     private @Nullable AABB blockBounds;
 
-    private SceneBuilder(ClientLevel level) {
+    private SceneBuilder(ClientLevel level, boolean strict) {
         this.level = level;
+        this.strict = strict;
     }
 
     static ShowoffScene structure(CompoundTag data, ClientLevel level) {
-        return new SceneBuilder(level).buildStructure(data);
+        return new SceneBuilder(level, false).buildStructure(data);
+    }
+
+    static ShowoffScene strictStructure(CompoundTag data, ClientLevel level) {
+        return new SceneBuilder(level, true).buildStructure(data);
     }
 
     static @Nullable ShowoffScene entity(ResourceLocation typeId, CompoundTag nbt, ClientLevel level) {
-        return new SceneBuilder(level).buildEntity(typeId, nbt);
+        if (typeId.equals(ShowoffOpenPayload.PLAYER_ID)) {
+            return player(level, nbt, false);
+        }
+        return new SceneBuilder(level, false).buildEntity(typeId, nbt);
+    }
+
+    static @Nullable ShowoffScene strictEntity(ResourceLocation typeId, CompoundTag nbt, ClientLevel level) {
+        if (typeId.equals(ShowoffOpenPayload.PLAYER_ID)) {
+            return player(level, nbt, true);
+        }
+        return new SceneBuilder(level, true).buildEntity(typeId, nbt);
+    }
+
+    private static ShowoffScene player(ClientLevel level, CompoundTag nbt, boolean strict) {
+        return new ShowoffScene(new LinkedHashMap<>(), List.of(), List.of(),
+                new AABB(-1.2, -0.2, -1.2, 1.2, 2.4, 1.2), null, strict, new PlayerShowoff(level, nbt));
     }
 
     private ShowoffScene buildStructure(CompoundTag data) {
@@ -95,6 +117,9 @@ final class SceneBuilder {
             BlockPos pos = new BlockPos(posTag.getInt(0), posTag.getInt(1), posTag.getInt(2));
             int index = blockTag.getInt("state");
             if (index < 0 || index >= palette.size()) {
+                if (strict) {
+                    throw new IllegalArgumentException("Structure block references an invalid palette index " + index);
+                }
                 continue;
             }
             CompoundTag nbt = blockTag.contains("nbt", Tag.TAG_COMPOUND) ? blockTag.getCompound("nbt") : null;
@@ -135,7 +160,7 @@ final class SceneBuilder {
         if (exact != null && entityBounds != null) {
             bounds = bounds.minmax(entityBounds);
         }
-        return new ShowoffScene(layers, blockEntities, entities, bounds, exact);
+        return new ShowoffScene(layers, blockEntities, entities, bounds, exact, strict);
     }
 
     private @Nullable ShowoffScene buildEntity(ResourceLocation typeId, CompoundTag nbt) {
@@ -160,7 +185,7 @@ final class SceneBuilder {
         if (entities.isEmpty() || entityBounds == null) {
             return null;
         }
-        return new ShowoffScene(layers, blockEntities, entities, entityBounds, null);
+        return new ShowoffScene(layers, blockEntities, entities, entityBounds, null, strict);
     }
 
     private void tesselate(StructureBlockGetter blocks) {
@@ -198,6 +223,9 @@ final class SceneBuilder {
                     }
                 }
             } catch (RuntimeException e) {
+                if (strict) {
+                    throw e;
+                }
                 ModpackAssistant.LOGGER.debug("Skipping {} at {} in the showoff view", state, pos, e);
             }
         }
@@ -219,6 +247,9 @@ final class SceneBuilder {
             BlockState replacement = BlockStateParser.parseForBlock(blockLookup, finalState, true).blockState();
             return replacement.is(Blocks.STRUCTURE_VOID) ? Blocks.AIR.defaultBlockState() : replacement;
         } catch (CommandSyntaxException e) {
+            if (strict) {
+                throw new IllegalArgumentException("Invalid structure jigsaw final_state", e);
+            }
             return Blocks.AIR.defaultBlockState();
         }
     }
@@ -228,6 +259,9 @@ final class SceneBuilder {
             BlockEntity blockEntity = null;
             if (nbt != null && nbt.contains("id")) {
                 blockEntity = BlockEntity.loadStatic(pos, state, nbt, level.registryAccess());
+                if (strict && blockEntity == null) {
+                    throw new IllegalArgumentException("Could not load block entity for " + state);
+                }
             }
             if (blockEntity == null && state.getBlock() instanceof EntityBlock entityBlock) {
                 blockEntity = entityBlock.newBlockEntity(pos, state);
@@ -237,6 +271,9 @@ final class SceneBuilder {
             }
             return blockEntity;
         } catch (RuntimeException e) {
+            if (strict) {
+                throw e;
+            }
             ModpackAssistant.LOGGER.debug("Skipping the block entity of {} at {} in the showoff view", state, pos, e);
             return null;
         }
@@ -251,13 +288,20 @@ final class SceneBuilder {
         tag.put("Pos", posTag);
         tag.remove("UUID");
         try {
-            EntityType.create(tag, level).ifPresent(entity -> {
+            EntityType.create(tag, level).ifPresentOrElse(entity -> {
                 entity.moveTo(pos.x, pos.y, pos.z, entity.getYRot(), entity.getXRot());
                 entity.setYBodyRot(entity.getYRot());
                 entity.setYHeadRot(entity.getYRot());
                 addEntity(entity);
+            }, () -> {
+                if (strict) {
+                    throw new IllegalArgumentException("Could not create structure entity");
+                }
             });
         } catch (RuntimeException e) {
+            if (strict) {
+                throw e;
+            }
             ModpackAssistant.LOGGER.debug("Skipping a template entity in the showoff view", e);
         }
     }
@@ -282,6 +326,9 @@ final class SceneBuilder {
             }
             entityBounds = entityBounds == null ? box : entityBounds.minmax(box);
         } catch (RuntimeException e) {
+            if (strict) {
+                throw e;
+            }
             ModpackAssistant.LOGGER.debug("Skipping {} in the showoff view", entity.getType(), e);
         }
     }

@@ -13,6 +13,8 @@ import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 public record ShowoffOpenPayload(ShowoffSubject subject, ResourceLocation id, CompoundTag data) implements CustomPacketPayload {
+    public static final String PLAYER_INPUT_KEY = "modpackassistant_player";
+    public static final ResourceLocation PLAYER_ID = ResourceLocation.withDefaultNamespace("mannequin");
     public static final Type<ShowoffOpenPayload> TYPE = new Type<>(ModpackAssistant.id("showoff_open"));
 
     public static final StreamCodec<ByteBuf, ShowoffOpenPayload> STREAM_CODEC = StreamCodec.composite(

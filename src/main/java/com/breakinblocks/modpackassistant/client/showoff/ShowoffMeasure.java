@@ -22,8 +22,12 @@ final class ShowoffMeasure {
     }
 
     static void request(ShowoffScene scene) {
+        request(scene, false);
+    }
+
+    static void request(ShowoffScene scene, boolean strict) {
         scene.startMeasuring();
-        QUEUE.add(new Attempt(scene, scene.center(), scene.measureReach(), 1));
+        QUEUE.add(new Attempt(scene, scene.center(), scene.measureReach(), 1, strict));
     }
 
     static void clear() {
@@ -36,6 +40,10 @@ final class ShowoffMeasure {
             try {
                 measure(attempt);
             } catch (RuntimeException e) {
+                if (attempt.strict()) {
+                    attempt.scene().measurementFailed(e);
+                    continue;
+                }
                 ModpackAssistant.LOGGER.warn("Could not measure the showoff view; framing falls back to hitboxes", e);
                 attempt.scene().measured(null, List.of());
             }
@@ -47,11 +55,19 @@ final class ShowoffMeasure {
         ViewBounds front = renderView(attempt, new Quaternionf());
         ViewBounds top = renderView(attempt, new Quaternionf().rotationX(Mth.HALF_PI));
         if (front == null || top == null) {
+            if (attempt.strict()) {
+                scene.measurementFailed(new IllegalStateException("Showoff measurement produced no visible pixels"));
+                return;
+            }
             scene.measured(null, List.of());
             return;
         }
         if ((front.clipped() || top.clipped()) && attempt.number() < MAX_ATTEMPTS) {
-            QUEUE.add(new Attempt(scene, attempt.center(), attempt.reach() * RETRY_GROWTH, attempt.number() + 1));
+            QUEUE.add(new Attempt(scene, attempt.center(), attempt.reach() * RETRY_GROWTH, attempt.number() + 1, attempt.strict()));
+            return;
+        }
+        if (attempt.strict() && (front.clipped() || top.clipped())) {
+            scene.measurementFailed(new IllegalStateException("Showoff measurement remained clipped after retries"));
             return;
         }
         Vec3 center = attempt.center();
@@ -127,7 +143,7 @@ final class ShowoffMeasure {
         return target;
     }
 
-    private record Attempt(ShowoffScene scene, Vec3 center, double reach, int number) {
+    private record Attempt(ShowoffScene scene, Vec3 center, double reach, int number, boolean strict) {
     }
 
     private record ViewBounds(float[] low, float[] high, float bottom, float top, float scale, boolean clipped) {

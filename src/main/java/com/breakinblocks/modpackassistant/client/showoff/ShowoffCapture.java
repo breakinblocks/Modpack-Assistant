@@ -24,10 +24,12 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 final class ShowoffCapture {
     private static final int MAX_WAIT_FRAMES = 60;
     private static final List<Request> PENDING = new ArrayList<>();
+    private static final List<HeadlessRequest> HEADLESS = new ArrayList<>();
 
     private ShowoffCapture() {
     }
@@ -45,11 +47,22 @@ final class ShowoffCapture {
         PENDING.add(new Request(session.scene(), session.view(), session.background(), width, height, file, 0));
     }
 
+    static void requestHeadless(ShowoffScene scene, ShowoffView view, int background,
+                                int width, int height, Path file, CompletableFuture<Path> result) {
+        HEADLESS.add(new HeadlessRequest(scene, view, background, width, height, file, 0, result));
+    }
+
     static void clear() {
+        RuntimeException failure = new IllegalStateException("Showoff capture cancelled because the client logged out");
+        for (HeadlessRequest request : HEADLESS) {
+            request.result().completeExceptionally(failure);
+        }
+        HEADLESS.clear();
         PENDING.clear();
     }
 
     static void process() {
+        processHeadless();
         if (PENDING.isEmpty()) {
             return;
         }
@@ -69,6 +82,33 @@ final class ShowoffCapture {
         }
     }
 
+    private static void processHeadless() {
+        if (HEADLESS.isEmpty()) {
+            return;
+        }
+        List<HeadlessRequest> requests = List.copyOf(HEADLESS);
+        HEADLESS.clear();
+        for (HeadlessRequest request : requests) {
+            ShowoffScene scene = request.scene();
+            if (scene.measurementFailure() != null) {
+                request.result().completeExceptionally(scene.measurementFailure());
+            } else if (scene.measuring() && request.waited() < MAX_WAIT_FRAMES) {
+                HEADLESS.add(request.waitedOneFrame());
+            } else if (scene.measuring()) {
+                RuntimeException timeout = new IllegalStateException("Showoff measurement timed out");
+                scene.measurementFailed(timeout);
+                request.result().completeExceptionally(timeout);
+            } else {
+                try {
+                    NativeImage image = render(scene, request.view(), request.background(), request.width(), request.height());
+                    writeHeadless(image, request.file(), request.result());
+                } catch (RuntimeException e) {
+                    request.result().completeExceptionally(e);
+                }
+            }
+        }
+    }
+
     private static void capture(Request request) {
         int width = request.width();
         int height = request.height();
@@ -77,13 +117,47 @@ final class ShowoffCapture {
             chat(Messages.SHOWOFF_CAPTURE_TOO_LARGE.get(width, height, maxSize).withStyle(ChatFormatting.RED));
             return;
         }
+        NativeImage image = render(request.scene(), request.view(), request.background(), width, height);
+        Util.ioPool().execute(() -> write(image, request.file()));
+    }
+
+    private static NativeImage render(ShowoffScene scene, ShowoffView view, int background, int width, int height) {
+        if (width <= 0 || height <= 0 || (long) width * height > Integer.MAX_VALUE / 4L) {
+            throw new IllegalArgumentException("Capture dimensions are invalid");
+        }
+        int maxSize = RenderSystem.maxSupportedTextureSize();
+        if (width > maxSize || height > maxSize) {
+            throw new IllegalArgumentException("Capture dimensions exceed GPU limit " + maxSize);
+        }
         NativeImage image;
         try (ShowoffTarget target = new ShowoffTarget(width, height)) {
-            target.draw(() -> ShowoffDraw.draw(request.scene(), request.view(), width, height));
+            target.draw(() -> ShowoffDraw.draw(scene, view, width, height));
             image = target.read();
         }
-        composite(image, request.background());
-        Util.ioPool().execute(() -> write(image, request.file()));
+        try {
+            composite(image, background);
+        } catch (RuntimeException e) {
+            image.close();
+            throw e;
+        }
+        return image;
+    }
+
+    private static void writeHeadless(NativeImage image, Path file, CompletableFuture<Path> result) {
+        try {
+            Util.ioPool().execute(() -> {
+                try (image) {
+                    image.writeToFile(file);
+                } catch (IOException | RuntimeException e) {
+                    result.completeExceptionally(e);
+                    return;
+                }
+                result.complete(file);
+            });
+        } catch (RuntimeException e) {
+            image.close();
+            result.completeExceptionally(e);
+        }
     }
 
     private static void composite(NativeImage image, int background) {
@@ -159,6 +233,13 @@ final class ShowoffCapture {
             file = directory.resolve(base + "_" + suffix + ShowoffFiles.EXTENSION);
         }
         return file;
+    }
+
+    private record HeadlessRequest(ShowoffScene scene, ShowoffView view, int background, int width, int height,
+                                   Path file, int waited, CompletableFuture<Path> result) {
+        HeadlessRequest waitedOneFrame() {
+            return new HeadlessRequest(scene, view, background, width, height, file, waited + 1, result);
+        }
     }
 
     private record Request(ShowoffScene scene, ShowoffView view, int background, int width, int height, Path file, int waited) {

@@ -6,12 +6,23 @@ import com.breakinblocks.modpackassistant.util.Messages;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.function.Consumer;
 
 final class ShowoffScreen extends Screen {
     private static final int BACKDROP = 0xFF000000;
@@ -33,9 +44,24 @@ final class ShowoffScreen extends Screen {
     private static final int TRANSPARENT_SWATCH = -1;
     private static final int NO_SWATCH = -2;
     private static final String ELLIPSIS = "...";
+    private static final int KEY_ESCAPE = 256;
+    private static final int KEY_ENTER = 257;
+    private static final int KEY_KEYPAD_ENTER = 335;
+    private static final float OVERLAY_DEPTH = 300.0F;
+    private static final float TOOLTIP_DEPTH = 400.0F;
+
+    private static final EquipmentSlot[] EQUIPMENT_SLOTS = {
+            EquipmentSlot.HEAD, EquipmentSlot.OFFHAND, EquipmentSlot.CHEST,
+            EquipmentSlot.MAINHAND, EquipmentSlot.LEGS, EquipmentSlot.FEET
+    };
 
     private final ShowoffSession session;
     private final ShowoffPreview preview = new ShowoffPreview();
+    private int sidebarWidth = SIDEBAR;
+    private int swatchSize = SWATCH;
+    private int swatchColumns = COLUMNS;
+    private int limbTop;
+    private int titleWidth;
     private int panelLeft;
     private int panelTop;
     private int panelRight;
@@ -52,6 +78,17 @@ final class ShowoffScreen extends Screen {
     private boolean panning;
     private @Nullable ShowoffAngleSlider yawSlider;
     private @Nullable ShowoffAngleSlider pitchSlider;
+    private @Nullable EditBox playerInput;
+    private final PlayerPoseSlider[] poseSliders = new PlayerPoseSlider[3];
+    private int pendingLookupTicks;
+    private String pendingLookup = "";
+    private boolean equipmentOpen;
+    private @Nullable EquipmentSlot pickerSlot;
+    private List<ItemStack> pickerItems = List.of();
+    private int pickerScroll;
+    private @Nullable EditBox pickerSearch;
+    private final Map<EquipmentSlot, List<ItemStack>> pickerChoices = new EnumMap<>(EquipmentSlot.class);
+    private @Nullable Consumer<GuiGraphics> tooltip;
 
     ShowoffScreen(ShowoffSession session) {
         super(session.title());
@@ -60,40 +97,93 @@ final class ShowoffScreen extends Screen {
 
     @Override
     protected void init() {
+        PlayerShowoff player = session.player();
         int margin = Math.max(10, Math.min(width, height) / 16);
         panelLeft = margin;
         panelTop = margin;
         panelRight = width - margin;
         panelBottom = height - margin;
-        sidebarLeft = panelRight - PADDING - SIDEBAR;
+        sidebarWidth = player == null ? SIDEBAR : 110;
+        swatchSize = player != null && height < 360 ? 10 : SWATCH;
+        swatchColumns = player != null && height < 360 ? 8 : COLUMNS;
+        sidebarLeft = panelRight - PADDING - sidebarWidth;
         previewLeft = panelLeft + PADDING;
-        previewTop = panelTop + PADDING + font.lineHeight + 4;
+        previewTop = panelTop + PADDING + (player == null ? font.lineHeight + 4 : BUTTON_HEIGHT + 4);
         previewRight = sidebarLeft - PADDING;
         footerTop = panelBottom - PADDING - font.lineHeight;
         previewBottom = footerTop - 4 - BUTTON_HEIGHT - PADDING;
         swatchTop = previewTop + font.lineHeight + 3;
-        int rows = (ShowoffBackground.SWATCHES.size() + COLUMNS - 1) / COLUMNS;
-        transparentTop = swatchTop + rows * (SWATCH + GAP);
+        int rows = (ShowoffBackground.SWATCHES.size() + swatchColumns - 1) / swatchColumns;
+        transparentTop = swatchTop + rows * (swatchSize + GAP);
         int guiScale = guiScale();
         session.previewSize((previewRight - previewLeft) * guiScale, (previewBottom - previewTop) * guiScale);
 
+        int actionHeight = player != null && height < 360 ? 14 : BUTTON_HEIGHT;
         int buttonTop = previewBottom + PADDING;
         addRenderableWidget(Button.builder(Messages.SHOWOFF_BUTTON_DONE.get(), button -> onClose())
-                .bounds(sidebarLeft, buttonTop, SIDEBAR, BUTTON_HEIGHT)
+                .bounds(sidebarLeft, buttonTop, sidebarWidth, actionHeight)
                 .build());
-        buttonTop -= BUTTON_HEIGHT + GAP;
+        buttonTop -= actionHeight + GAP;
         addRenderableWidget(Button.builder(Messages.SHOWOFF_BUTTON_SCREENSHOT.get(), button -> ShowoffCapture.request(session, "", 0, 0))
-                .bounds(sidebarLeft, buttonTop, SIDEBAR, BUTTON_HEIGHT)
+                .bounds(sidebarLeft, buttonTop, sidebarWidth, actionHeight)
                 .build());
-        buttonTop -= BUTTON_HEIGHT + GAP;
-        addRenderableWidget(Button.builder(Messages.SHOWOFF_BUTTON_RESET.get(), button -> session.view(ShowoffView.DEFAULT))
-                .bounds(sidebarLeft, buttonTop, SIDEBAR, BUTTON_HEIGHT)
+        buttonTop -= actionHeight + GAP;
+        addRenderableWidget(Button.builder(Messages.SHOWOFF_BUTTON_RESET.get(), button -> {
+                    session.view(ShowoffView.DEFAULT);
+                    if (session.player() != null) {
+                        session.player().reset();
+                        syncPose();
+                    }
+                })
+                .bounds(sidebarLeft, buttonTop, sidebarWidth, actionHeight)
                 .build());
+
+        titleWidth = previewRight - previewLeft;
+        if (player != null) {
+            titleWidth = Math.min(font.width(title) + PADDING, Math.max(30, (previewRight - previewLeft) / 2 - PADDING));
+            int inputLeft = previewLeft + titleWidth + PADDING;
+            playerInput = new EditBox(font, inputLeft, panelTop + PADDING, previewRight - inputLeft, BUTTON_HEIGHT,
+                    Component.literal("Playername/UUID"));
+            playerInput.setMaxLength(36);
+            playerInput.setHint(Component.literal("Playername/UUID"));
+            playerInput.setValue(session.playerInput());
+            playerInput.setResponder(value -> {
+                session.playerInput(value);
+                player.inputChanged();
+                pendingLookup = value;
+                pendingLookupTicks = 8;
+            });
+            addRenderableWidget(playerInput);
+            limbTop = transparentTop + swatchSize + GAP + 2;
+            int controlsTop = limbTop + font.lineHeight + GAP;
+            int controlHeight = Math.min(BUTTON_HEIGHT, (buttonTop - GAP - controlsTop - 3 * GAP) / 4);
+            if (controlHeight < 8) {
+                throw new IllegalStateException("Showoff GUI is too small for player limb controls");
+            }
+            Button limbSelector = addRenderableWidget(Button.builder(Component.literal(PlayerShowoff.PART_NAMES[session.posePart()]), button -> {
+                session.posePart((session.posePart() + 1) % PlayerShowoff.PARTS);
+                button.setMessage(Component.literal(PlayerShowoff.PART_NAMES[session.posePart()]));
+                syncPose();
+            }).bounds(sidebarLeft, controlsTop, sidebarWidth, controlHeight).build());
+            limbSelector.setTooltip(Tooltip.create(Component.literal("Click to select the next limb")));
+            for (int axis = 0; axis < 3; axis++) {
+                poseSliders[axis] = addRenderableWidget(new PlayerPoseSlider(sidebarLeft,
+                        controlsTop + (axis + 1) * (controlHeight + GAP), sidebarWidth, controlHeight, session, axis));
+            }
+        }
 
         int sliderTop = previewBottom + PADDING;
         int sliderWidth = (previewRight - previewLeft - PADDING) / 2;
         yawSlider = addRenderableWidget(ShowoffAngleSlider.yaw(previewLeft, sliderTop, sliderWidth, BUTTON_HEIGHT, session));
         pitchSlider = addRenderableWidget(ShowoffAngleSlider.pitch(previewRight - sliderWidth, sliderTop, sliderWidth, BUTTON_HEIGHT, session));
+        if (pickerSlot != null) {
+            if (pickerSearch != null) {
+                pickerSearch.setX(pickerSearchLeft());
+                pickerSearch.setY(pickerSearchTop());
+                pickerSearch.setWidth(pickerSearchWidth());
+            }
+            pickerScroll = Math.min(pickerScroll, Math.max(0, pickerRows() - pickerVisibleRows()));
+        }
     }
 
     @Override
@@ -116,15 +206,26 @@ final class ShowoffScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        tooltip = null;
         if (yawSlider != null && pitchSlider != null) {
             yawSlider.sync();
             pitchSlider.sync();
         }
         super.render(graphics, mouseX, mouseY, partialTick);
 
-        graphics.drawString(font, fit(title.getString(), previewRight - previewLeft), previewLeft, panelTop + PADDING, TEXT);
+        PlayerShowoff player = session.player();
+        graphics.drawString(font, fit(title.getString(), titleWidth), previewLeft, panelTop + PADDING + (player == null ? 0 : 6), TEXT);
         graphics.drawString(font, Messages.SHOWOFF_LABEL_BACKGROUND.get(), sidebarLeft, previewTop, TEXT);
         renderSwatches(graphics, mouseX, mouseY);
+        if (player != null) {
+            renderEquipmentButton(graphics, mouseX, mouseY);
+            graphics.drawString(font, Component.literal("Limbs"), sidebarLeft, limbTop, TEXT);
+            graphics.drawString(font, fit(player.status(), sidebarWidth), sidebarLeft, panelTop + PADDING, MUTED);
+            if (inside(mouseX, mouseY, sidebarLeft, panelTop + PADDING, sidebarWidth, font.lineHeight)) {
+                Component status = Component.literal(player.status());
+                tooltip = g -> g.renderTooltip(font, status, mouseX, mouseY);
+            }
+        }
 
         ShowoffView view = session.view();
         Component status = Messages.SHOWOFF_STATUS.get(format(view.yaw()), format(view.pitch()), format(view.zoom()));
@@ -135,9 +236,74 @@ final class ShowoffScreen extends Screen {
             graphics.drawString(font, hint, previewLeft, footerTop, MUTED);
         }
 
-        int hovered = swatchAt(mouseX, mouseY);
-        if (hovered >= 0) {
-            graphics.renderTooltip(font, Component.literal(ShowoffBackground.SWATCHES.get(hovered).getName()), mouseX, mouseY);
+        if (equipmentOpen && player != null) {
+            graphics.pose().pushPose();
+            graphics.pose().translate(0.0F, 0.0F, OVERLAY_DEPTH);
+            renderEquipmentOverlay(graphics, mouseX, mouseY);
+            if (pickerSlot != null && pickerSearch != null) {
+                pickerSearch.render(graphics, mouseX, mouseY, partialTick);
+            }
+            graphics.pose().popPose();
+        }
+
+        if (tooltip != null) {
+            graphics.pose().pushPose();
+            graphics.pose().translate(0.0F, 0.0F, TOOLTIP_DEPTH);
+            tooltip.accept(graphics);
+            graphics.pose().popPose();
+        }
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (pendingLookupTicks > 0 && --pendingLookupTicks == 0 && session.player() != null) {
+            session.player().lookup(pendingLookup);
+        }
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (pickerSlot != null && keyCode == KEY_ESCAPE) {
+            closePicker();
+            return true;
+        }
+        if (pickerSlot != null) {
+            if (pickerSearch != null) {
+                pickerSearch.keyPressed(keyCode, scanCode, modifiers);
+            }
+            return true;
+        }
+        if (equipmentOpen && keyCode == KEY_ESCAPE) {
+            equipmentOpen = false;
+            return true;
+        }
+        if (playerInput != null && playerInput.isFocused() && (keyCode == KEY_ENTER || keyCode == KEY_KEYPAD_ENTER) && session.player() != null) {
+            pendingLookup = playerInput.getValue();
+            session.playerInput(pendingLookup);
+            pendingLookupTicks = 0;
+            session.player().lookup(pendingLookup);
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override
+    public boolean charTyped(char codePoint, int modifiers) {
+        if (pickerSlot != null) {
+            if (pickerSearch != null) {
+                pickerSearch.charTyped(codePoint, modifiers);
+            }
+            return true;
+        }
+        return super.charTyped(codePoint, modifiers);
+    }
+
+    private void syncPose() {
+        for (PlayerPoseSlider slider : poseSliders) {
+            if (slider != null) {
+                slider.sync();
+            }
         }
     }
 
@@ -148,21 +314,27 @@ final class ShowoffScreen extends Screen {
             int x = swatchLeft(i);
             int y = swatchTop(i);
             int color = ShowoffBackground.of(swatches.get(i));
-            graphics.fill(x, y, x + SWATCH, y + SWATCH, color);
-            outlineSwatch(graphics, x, y, SWATCH, color == background, inside(mouseX, mouseY, x, y, SWATCH, SWATCH));
+            graphics.fill(x, y, x + swatchSize, y + swatchSize, color);
+            outlineSwatch(graphics, x, y, swatchSize, color == background, inside(mouseX, mouseY, x, y, swatchSize, swatchSize));
         }
-        checkerboard(graphics, sidebarLeft, transparentTop, sidebarLeft + SIDEBAR, transparentTop + SWATCH);
+        checkerboard(graphics, sidebarLeft, transparentTop, sidebarLeft + sidebarWidth, transparentTop + swatchSize);
         Component label = Messages.SHOWOFF_LABEL_TRANSPARENT.get();
-        graphics.drawString(font, label, sidebarLeft + (SIDEBAR - font.width(label)) / 2, transparentTop + (SWATCH - font.lineHeight) / 2 + 1, TEXT);
-        outlineSwatch(graphics, sidebarLeft, transparentTop, SIDEBAR, ShowoffBackground.isTransparent(background),
-                inside(mouseX, mouseY, sidebarLeft, transparentTop, SIDEBAR, SWATCH));
+        graphics.drawString(font, label, sidebarLeft + (sidebarWidth - font.width(label)) / 2, transparentTop + (swatchSize - font.lineHeight) / 2 + 1, TEXT);
+        outlineSwatch(graphics, sidebarLeft, transparentTop, sidebarWidth, ShowoffBackground.isTransparent(background),
+                inside(mouseX, mouseY, sidebarLeft, transparentTop, sidebarWidth, swatchSize));
+
+        int hovered = swatchAt(mouseX, mouseY);
+        if (hovered >= 0) {
+            Component name = Component.literal(swatches.get(hovered).getName());
+            tooltip = g -> g.renderTooltip(font, name, mouseX, mouseY);
+        }
     }
 
     private void outlineSwatch(GuiGraphics graphics, int x, int y, int width, boolean selected, boolean hovered) {
         if (selected) {
-            graphics.renderOutline(x - 1, y - 1, width + 2, SWATCH + 2, TEXT);
+            graphics.renderOutline(x - 1, y - 1, width + 2, swatchSize + 2, TEXT);
         } else if (hovered) {
-            graphics.renderOutline(x - 1, y - 1, width + 2, SWATCH + 2, MUTED);
+            graphics.renderOutline(x - 1, y - 1, width + 2, swatchSize + 2, MUTED);
         }
     }
 
@@ -177,6 +349,26 @@ final class ShowoffScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (session.player() != null && equipmentOpen && pickerSlot == null
+                && inside(mouseX, mouseY, previewLeft + PADDING, previewTop + PADDING, 24, 24)) {
+            if (button == 0) {
+                equipmentOpen = false;
+            }
+            return true;
+        }
+        if (session.player() != null && equipmentOpen && equipmentClick(mouseX, mouseY, button)) {
+            return true;
+        }
+        if (session.player() != null && inside(mouseX, mouseY, previewLeft + PADDING, previewTop + PADDING, 24, 24)) {
+            equipmentOpen = !equipmentOpen;
+            pickerSlot = null;
+            if (equipmentOpen) {
+                clearFocus();
+                rotating = false;
+                panning = false;
+            }
+            return true;
+        }
         if (super.mouseClicked(mouseX, mouseY, button)) {
             return true;
         }
@@ -200,6 +392,12 @@ final class ShowoffScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (pickerSlot != null) {
+            if (pickerSearch != null) {
+                pickerSearch.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+            }
+            return true;
+        }
         ShowoffView view = session.view();
         if (rotating) {
             session.view(view.withAngle(view.yaw() + (float) dragX * ROTATE_DEGREES_PER_PIXEL, view.pitch() + (float) dragY * ROTATE_DEGREES_PER_PIXEL));
@@ -218,11 +416,23 @@ final class ShowoffScreen extends Screen {
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         rotating = false;
         panning = false;
+        if (pickerSlot != null) {
+            if (pickerSearch != null) {
+                pickerSearch.mouseReleased(mouseX, mouseY, button);
+            }
+            return true;
+        }
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (pickerSlot != null) {
+            if (inside(mouseX, mouseY, pickerLeft(), pickerTop(), pickerWidth(), pickerHeight())) {
+                pickerScroll = Math.max(0, Math.min(Math.max(0, pickerRows() - pickerVisibleRows()), pickerScroll - (int) Math.signum(scrollY)));
+            }
+            return true;
+        }
         if (inside(mouseX, mouseY, previewLeft, previewTop, previewRight - previewLeft, previewBottom - previewTop)) {
             ShowoffView view = session.view();
             session.view(view.withZoom((float) (view.zoom() * Math.pow(ZOOM_STEP, scrollY))));
@@ -248,23 +458,317 @@ final class ShowoffScreen extends Screen {
 
     private int swatchAt(double x, double y) {
         for (int i = 0; i < ShowoffBackground.SWATCHES.size(); i++) {
-            if (inside(x, y, swatchLeft(i), swatchTop(i), SWATCH, SWATCH)) {
+            if (inside(x, y, swatchLeft(i), swatchTop(i), swatchSize, swatchSize)) {
                 return i;
             }
         }
-        return inside(x, y, sidebarLeft, transparentTop, SIDEBAR, SWATCH) ? TRANSPARENT_SWATCH : NO_SWATCH;
+        return inside(x, y, sidebarLeft, transparentTop, sidebarWidth, swatchSize) ? TRANSPARENT_SWATCH : NO_SWATCH;
     }
 
     private int swatchLeft(int index) {
-        return sidebarLeft + index % COLUMNS * (SWATCH + GAP);
+        return sidebarLeft + index % swatchColumns * (swatchSize + GAP);
     }
 
     private int swatchTop(int index) {
-        return swatchTop + index / COLUMNS * (SWATCH + GAP);
+        return swatchTop + index / swatchColumns * (swatchSize + GAP);
     }
 
     private static boolean inside(double x, double y, int left, int top, int width, int height) {
         return x >= left && x < left + width && y >= top && y < top + height;
+    }
+
+    private void renderEquipmentButton(GuiGraphics graphics, int mouseX, int mouseY) {
+        int left = previewLeft + PADDING;
+        int top = previewTop + PADDING;
+        boolean hovered = inside(mouseX, mouseY, left, top, 24, 24);
+        graphics.fill(left, top, left + 24, top + 24, hovered ? 0xFF5A5A5A : 0xFF303030);
+        graphics.renderOutline(left, top, 24, 24, equipmentOpen ? TEXT : BORDER);
+        graphics.renderItem(new ItemStack(Items.IRON_CHESTPLATE), left + 4, top + 4);
+        if (hovered) {
+            tooltip = g -> g.renderTooltip(font, Component.literal("Equipment"), mouseX, mouseY);
+        }
+    }
+
+    private void renderEquipmentOverlay(GuiGraphics graphics, int mouseX, int mouseY) {
+        int crossLeft = equipmentCrossLeft();
+        int crossTop = equipmentCrossTop();
+        graphics.fill(crossLeft - 6, crossTop - 6, crossLeft + 78, crossTop + 112, 0xE8101010);
+        graphics.renderOutline(crossLeft - 6, crossTop - 6, 84, 118, BORDER);
+        slotButton(graphics, EquipmentSlot.HEAD, crossLeft + 27, crossTop, mouseX, mouseY);
+        slotButton(graphics, EquipmentSlot.OFFHAND, crossLeft, crossTop + 27, mouseX, mouseY);
+        slotButton(graphics, EquipmentSlot.CHEST, crossLeft + 27, crossTop + 27, mouseX, mouseY);
+        slotButton(graphics, EquipmentSlot.MAINHAND, crossLeft + 54, crossTop + 27, mouseX, mouseY);
+        slotButton(graphics, EquipmentSlot.LEGS, crossLeft + 27, crossTop + 54, mouseX, mouseY);
+        slotButton(graphics, EquipmentSlot.FEET, crossLeft + 27, crossTop + 81, mouseX, mouseY);
+        if (pickerSlot != null) {
+            graphics.pose().pushPose();
+            graphics.pose().translate(0.0F, 0.0F, OVERLAY_DEPTH / 2.0F);
+            renderPicker(graphics, mouseX, mouseY);
+            graphics.pose().popPose();
+        }
+    }
+
+    private void slotButton(GuiGraphics graphics, EquipmentSlot slot, int left, int top, int mouseX, int mouseY) {
+        boolean hovered = pickerSlot == null && inside(mouseX, mouseY, left, top, 24, 24);
+        graphics.fill(left, top, left + 24, top + 24, hovered ? 0xFF5A5A5A : 0xFF292929);
+        graphics.renderOutline(left, top, 24, 24, slot == pickerSlot ? TEXT : BORDER);
+        ItemStack stack = session.player().equipment(slot);
+        if (stack.isEmpty()) {
+            graphics.drawCenteredString(font, Component.literal(slot.getName().substring(0, 1).toUpperCase(Locale.ROOT)), left + 12, top + 8, MUTED);
+            if (hovered) {
+                Component name = Component.literal(slot.getName());
+                tooltip = g -> g.renderTooltip(font, name, mouseX, mouseY);
+            }
+        } else {
+            graphics.renderItem(stack, left + 4, top + 4);
+            if (hovered) {
+                tooltip = g -> g.renderTooltip(font, stack, mouseX, mouseY);
+            }
+        }
+    }
+
+    private void renderPicker(GuiGraphics graphics, int mouseX, int mouseY) {
+        int left = pickerLeft();
+        int top = pickerTop();
+        int width = pickerWidth();
+        int height = pickerHeight();
+        graphics.fill(left, top, left + width, top + height, 0xF0181818);
+        graphics.renderOutline(left, top, width, height, TEXT);
+        graphics.drawString(font, Component.literal("Item Picker · " + pickerSlot.getName()), left + 8, top + 7, TEXT);
+        int gridTop = top + 39;
+        int cell = 24;
+        boolean clearHovered = inside(mouseX, mouseY, left + 8, gridTop, 24, 24);
+        graphics.fill(left + 8, gridTop, left + 32, gridTop + 24, clearHovered ? 0xFF5A5A5A : 0xFF292929);
+        graphics.renderOutline(left + 8, gridTop, 24, 24, BORDER);
+        graphics.drawCenteredString(font, Component.literal("×"), left + 20, gridTop + 8, MUTED);
+        if (clearHovered) {
+            Component clear = Component.literal("Clear " + pickerSlot.getName());
+            tooltip = g -> g.renderTooltip(font, clear, mouseX, mouseY);
+        }
+        int columns = pickerColumns();
+        int gridLeft = left + 8;
+        int itemsTop = gridTop + 27;
+        int start = pickerScroll * columns;
+        for (int i = 0; i < pickerVisibleRows() * columns; i++) {
+            int index = start + i;
+            if (index >= pickerItems.size()) {
+                break;
+            }
+            int x = gridLeft + (i % columns) * cell;
+            int y = itemsTop + (i / columns) * cell;
+            ItemStack stack = pickerItems.get(index);
+            boolean hovered = inside(mouseX, mouseY, x, y, 24, 24);
+            graphics.fill(x, y, x + 24, y + 24, hovered ? 0xFF5A5A5A : 0xFF292929);
+            graphics.renderItem(stack, x + 4, y + 4);
+            if (hovered) {
+                tooltip = g -> g.renderTooltip(font, stack, mouseX, mouseY);
+            }
+        }
+        if (pickerItems.isEmpty()) {
+            graphics.drawCenteredString(font, Component.literal("No matching items"), left + width / 2, itemsTop + 8, MUTED);
+        }
+        if (pickerRows() > pickerVisibleRows()) {
+            int trackTop = itemsTop;
+            int trackBottom = itemsTop + pickerVisibleRows() * cell;
+            int thumbHeight = Math.max(8, (trackBottom - trackTop) * pickerVisibleRows() / pickerRows());
+            int thumbTop = trackTop + (trackBottom - trackTop - thumbHeight) * pickerScroll
+                    / Math.max(1, pickerRows() - pickerVisibleRows());
+            graphics.fill(left + width - 5, trackTop, left + width - 2, trackBottom, 0xFF303030);
+            graphics.fill(left + width - 5, thumbTop, left + width - 2, thumbTop + thumbHeight, MUTED);
+        }
+    }
+
+    private boolean equipmentClick(double x, double y, int button) {
+        PlayerShowoff player = session.player();
+        if (pickerSlot != null) {
+            if (!inside(x, y, pickerLeft(), pickerTop(), pickerWidth(), pickerHeight())) {
+                closePicker();
+                return true;
+            }
+            if (button == 0 && inside(x, y, pickerSearchLeft(), pickerSearchTop(), pickerSearchWidth(), 18)) {
+                if (pickerSearch != null) {
+                    pickerSearch.mouseClicked(x, y, button);
+                }
+                return true;
+            }
+            int gridTop = pickerTop() + 39;
+            if (button == 0 && inside(x, y, pickerLeft() + 8, gridTop, 24, 24)) {
+                player.equip(pickerSlot, ItemStack.EMPTY);
+                closePicker();
+                return true;
+            }
+            int columns = pickerColumns();
+            int cell = 24;
+            int gridLeft = pickerLeft() + 8;
+            int itemsTop = gridTop + 27;
+            if (button != 0 || !inside(x, y, gridLeft, itemsTop, columns * cell, pickerVisibleRows() * cell)) {
+                return true;
+            }
+            int col = (int) ((x - gridLeft) / cell);
+            int row = (int) ((y - itemsTop) / cell);
+            if (col >= 0 && col < columns && row >= 0 && row < pickerVisibleRows()) {
+                int index = pickerScroll * columns + row * columns + col;
+                if (index >= 0 && index < pickerItems.size()) {
+                    player.equip(pickerSlot, pickerItems.get(index).copy());
+                    closePicker();
+                }
+            }
+            return true;
+        }
+        int toggleLeft = previewLeft + PADDING;
+        int toggleTop = previewTop + PADDING;
+        if (inside(x, y, toggleLeft, toggleTop, 24, 24)) {
+            if (button == 0) {
+                equipmentOpen = false;
+                pickerSlot = null;
+            }
+            return true;
+        }
+        int left = equipmentCrossLeft();
+        int top = equipmentCrossTop();
+        EquipmentSlot slot = slotAt(x, y, left, top);
+        if (slot != null) {
+            if (button == 1) {
+                player.equip(slot, ItemStack.EMPTY);
+                return true;
+            }
+            if (button != 0) {
+                return true;
+            }
+            pickerSlot = slot;
+            EditBox search = ensurePickerSearch();
+            search.setFocused(false);
+            search.setValue("");
+            search.setFocused(true);
+            pickerItems = pickerChoices(slot);
+            pickerScroll = 0;
+            return true;
+        }
+        if (!inside(x, y, left - 6, top - 6, 84, 118)) {
+            equipmentOpen = false;
+            return false;
+        }
+        return true;
+    }
+
+    private @Nullable EquipmentSlot slotAt(double x, double y, int left, int top) {
+        int[][] positions = {{27, 0}, {0, 27}, {27, 27}, {54, 27}, {27, 54}, {27, 81}};
+        for (int i = 0; i < positions.length; i++) {
+            if (inside(x, y, left + positions[i][0], top + positions[i][1], 24, 24)) {
+                return EQUIPMENT_SLOTS[i];
+            }
+        }
+        return null;
+    }
+
+    private List<ItemStack> pickerChoices(EquipmentSlot slot) {
+        return pickerChoices.computeIfAbsent(slot, this::itemChoices);
+    }
+
+    private List<ItemStack> itemChoices(EquipmentSlot slot) {
+        PlayerShowoff player = session.player();
+        List<ItemStack> result = new ArrayList<>();
+        for (Item item : BuiltInRegistries.ITEM) {
+            if (item == Items.AIR) {
+                continue;
+            }
+            ItemStack stack = new ItemStack(item);
+            if (player.fits(slot, stack)) {
+                result.add(stack);
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private void refreshPickerItems() {
+        if (pickerSlot == null) {
+            return;
+        }
+        String query = pickerSearch == null ? "" : pickerSearch.getValue().toLowerCase(Locale.ROOT);
+        pickerItems = pickerChoices(pickerSlot).stream()
+                .filter(stack -> matchesPickerQuery(stack, query))
+                .toList();
+        pickerScroll = 0;
+    }
+
+    private static boolean matchesPickerQuery(ItemStack stack, String query) {
+        if (query.isBlank()) {
+            return true;
+        }
+        String name = stack.getHoverName().getString().toLowerCase(Locale.ROOT);
+        String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString().toLowerCase(Locale.ROOT);
+        return name.contains(query) || id.contains(query);
+    }
+
+    private int equipmentCrossLeft() {
+        return previewLeft + PADDING;
+    }
+
+    private int equipmentCrossTop() {
+        return previewTop + 34;
+    }
+
+    private int pickerLeft() {
+        return (width - pickerWidth()) / 2;
+    }
+
+    private int pickerTop() {
+        return Math.max(panelTop + 8, height / 2 - pickerHeight() / 2);
+    }
+
+    private int pickerWidth() {
+        return Math.min(320, Math.max(192, width - 24));
+    }
+
+    private int pickerHeight() {
+        return Math.min(220, Math.max(120, height - 24));
+    }
+
+    private int pickerColumns() {
+        return Math.max(1, (pickerWidth() - 16) / 24);
+    }
+
+    private int pickerVisibleRows() {
+        return Math.max(1, (pickerHeight() - 66) / 24);
+    }
+
+    private int pickerRows() {
+        return (pickerItems.size() + pickerColumns() - 1) / pickerColumns();
+    }
+
+    private int pickerSearchLeft() {
+        return pickerLeft() + 8;
+    }
+
+    private int pickerSearchTop() {
+        return pickerTop() + 17;
+    }
+
+    private int pickerSearchWidth() {
+        return pickerWidth() - 16;
+    }
+
+    private void closePicker() {
+        pickerSlot = null;
+        pickerScroll = 0;
+        if (pickerSearch != null) {
+            pickerSearch.setFocused(false);
+        }
+    }
+
+    private EditBox ensurePickerSearch() {
+        if (pickerSearch == null) {
+            pickerSearch = new EditBox(font, pickerSearchLeft(), pickerSearchTop(), pickerSearchWidth(), 18,
+                    Component.literal("Search items"));
+            pickerSearch.setHint(Component.literal("Search items..."));
+            pickerSearch.setMaxLength(64);
+            pickerSearch.setResponder(value -> refreshPickerItems());
+        } else {
+            pickerSearch.setX(pickerSearchLeft());
+            pickerSearch.setY(pickerSearchTop());
+            pickerSearch.setWidth(pickerSearchWidth());
+        }
+        return pickerSearch;
     }
 
     private String fit(String text, int width) {

@@ -34,20 +34,30 @@ final class ShowoffScene {
     private final Map<RenderType, VertexRecorder> layers;
     private final List<BlockEntity> blockEntities;
     private final List<Entity> entities;
+    private final @Nullable PlayerShowoff player;
     private final @Nullable AABB exactBounds;
+    private final boolean strict;
     private AABB bounds;
     private List<AABB> silhouette;
     private boolean measuring;
+    private @Nullable RuntimeException measurementFailure;
     private int revision;
 
     ShowoffScene(Map<RenderType, VertexRecorder> layers, List<BlockEntity> blockEntities, List<Entity> entities,
-                 AABB bounds, @Nullable AABB exactBounds) {
+                 AABB bounds, @Nullable AABB exactBounds, boolean strict) {
+        this(layers, blockEntities, entities, bounds, exactBounds, strict, null);
+    }
+
+    ShowoffScene(Map<RenderType, VertexRecorder> layers, List<BlockEntity> blockEntities, List<Entity> entities,
+                 AABB bounds, @Nullable AABB exactBounds, boolean strict, @Nullable PlayerShowoff player) {
         this.layers = new LinkedHashMap<>(layers);
         this.blockEntities = new ArrayList<>(blockEntities);
         this.entities = new ArrayList<>(entities);
+        this.player = player;
         this.exactBounds = exactBounds;
+        this.strict = strict;
         this.bounds = bounds;
-        this.silhouette = exactBounds == null ? List.of() : List.of(bounds);
+        this.silhouette = exactBounds == null && player == null ? List.of() : List.of(bounds);
     }
 
     Vec3 center() {
@@ -63,11 +73,25 @@ final class ShowoffScene {
     }
 
     int revision() {
-        return revision;
+        return revision + (player == null ? 0 : player.revision());
+    }
+
+    @Nullable PlayerShowoff player() {
+        return player;
     }
 
     boolean measuring() {
         return measuring;
+    }
+
+    @Nullable RuntimeException measurementFailure() {
+        return measurementFailure;
+    }
+
+    void measurementFailed(RuntimeException failure) {
+        measuring = false;
+        measurementFailure = failure;
+        revision++;
     }
 
     void startMeasuring() {
@@ -75,6 +99,9 @@ final class ShowoffScene {
     }
 
     void measured(@Nullable AABB measuredBounds, List<AABB> columns) {
+        if (measurementFailure != null) {
+            return;
+        }
         measuring = false;
         if (measuredBounds != null && !columns.isEmpty()) {
             bounds = measuredBounds;
@@ -113,7 +140,7 @@ final class ShowoffScene {
                 drawLayer(poseStack, buffers, type);
             }
         }
-        if (!blockEntities.isEmpty() || !entities.isEmpty()) {
+        if (!blockEntities.isEmpty() || !entities.isEmpty() || player != null) {
             drawFeatures(poseStack, buffers, cameraOrientation);
         }
         for (RenderType type : translucent) {
@@ -143,6 +170,9 @@ final class ShowoffScene {
             try {
                 renderBlockEntity(minecraft, blockEntity, local, buffers);
             } catch (RuntimeException e) {
+                if (strict) {
+                    throw e;
+                }
                 ModpackAssistant.LOGGER.warn("Dropping block entity at {} from the showoff view after it failed to render", pos, e);
                 placed.remove();
             }
@@ -159,9 +189,15 @@ final class ShowoffScene {
                     dispatcher.render(entity, entity.getX(), entity.getY(), entity.getZ(), entity.getYRot(), 1.0F,
                             copy(poseStack), buffers, LightTexture.FULL_BRIGHT);
                 } catch (RuntimeException e) {
+                    if (strict) {
+                        throw e;
+                    }
                     ModpackAssistant.LOGGER.warn("Dropping {} from the showoff view after it failed to render", entity.getType(), e);
                     iterator.remove();
                 }
+            }
+            if (player != null) {
+                player.render(copy(poseStack), buffers);
             }
         } finally {
             dispatcher.setRenderShadow(true);
