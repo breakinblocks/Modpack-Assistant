@@ -29,6 +29,34 @@ Invalid arguments throw immediately. `STRUCTURE` subjects accept the same struct
 as the preview. Rendering uses the existing scene measurements and framebuffer capture pipeline;
 orchestration and image post-processing belong to the caller.
 
+For mannequin captures, supply vanilla `equipment` NBT and an optional `Pose` compound:
+
+```snbt
+{
+  profile: {name: "TheonlyTazz"},
+  equipment: {
+    head: {id: "minecraft:diamond_helmet", count: 1},
+    chest: {id: "minecraft:diamond_chestplate", count: 1},
+    mainhand: {id: "minecraft:diamond_sword", count: 1},
+    offhand: {id: "minecraft:shield", count: 1}
+  },
+  Pose: {
+    Head: [0.0f, 15.0f, 0.0f],
+    RightArm: [-45.0f, 0.0f, 0.0f],
+    LeftArm: [-20.0f, 0.0f, 0.0f]
+  }
+}
+```
+
+Pass this compound as `data` with entity ID `minecraft:mannequin`. Equipment keys are `head`,
+`chest`, `legs`, `feet`, `mainhand`, and `offhand`. Pose keys are `Head`, `Body`, `LeftArm`,
+`RightArm`, `LeftLeg`, and `RightLeg`; each contains pitch, yaw, and roll in degrees, from -180
+to 180. Omitted limbs use zero rotation. Armor and held items follow the specified pose.
+Malformed equipment or pose data completes the capture future exceptionally.
+When `profile` is supplied, capture waits for profile resolution and skin download before measuring
+or rendering. Failed or timed-out skin requests fail the capture instead of producing a default-skin
+image. Omitting `profile` uses the mannequin's default skin.
+
 ## Commands
 
 Admin and player (permission level 2 unless noted):
@@ -169,9 +197,9 @@ entities last, so placement behaves the same as a structure saved by a structure
 
 Showoff draws a structure or an entity on its own, in an isometric view, and saves clean PNG
 screenshots of it. It is meant for quest book images, mod and pack pages, wiki pictures, and checking
-what a template or a grabbed build looks like without placing it. Everything it does can be done with
-the mouse in its screen or entirely with commands, so a script or an MCP server can produce images
-with no one at the game.
+what a template or a grabbed build looks like without placing it. Commands control the subject,
+view, background and screenshots, so a script or an MCP server can produce images with no one at
+the game. The player skin and limb controls are available in the preview screen.
 
 ### Requirements
 
@@ -252,6 +280,30 @@ NBT an entity shows its default variant, colour and equipment (none).
 ```
 
 Riders given with `Passengers` are drawn in their seats.
+
+#### Player showoff
+
+Run `/mpa showoff player <playerName|UUID>` to open the player editor with that player's skin.
+For example, `/mpa showoff player Dinnerbone`; tab completion suggests online player names.
+You can also run `/mpa showoff entity minecraft:mannequin` and enter a username,
+a dashed UUID or a compact UUID beside the entity title. The client resolves the profile and
+downloads its skin asynchronously after a short typing delay; Enter submits immediately. A default
+skin appears while loading. The status reports lookup failures, and hovering it shows the full message.
+
+The Limbs panel sits below the background selector. Click the part selector to cycle through Head,
+Body, Left Arm, Right Arm, Left Leg and Right Leg. Set Pitch, Yaw and Roll independently from
+-180 to 180 degrees; scrolling over a slider changes its angle by one degree. Each part retains its
+angles when another part is selected. Reset view also clears the limb pose for player previews.
+Screenshots use the selected skin and pose, including the skin's outer layers and slim arms.
+
+Click the chestplate button at the top left of the preview to open the equipment slots. Select a
+slot to browse items, and use the search field to filter by item name or registry ID (including the
+mod namespace). Armor slots show matching equipment; either hand accepts all items. Select the clear
+entry or right-click an equipment slot to empty it. Equipment appears immediately and follows the
+selected limb pose. Escape closes the item picker, then the equipment popup.
+
+The standalone mannequin editor uses its own client mannequin; passengers and NBT poses are not
+included. Mannequins inside structure previews keep their normal entity rendering.
 
 ### The preview screen
 

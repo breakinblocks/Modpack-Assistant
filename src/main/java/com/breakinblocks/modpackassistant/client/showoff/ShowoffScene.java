@@ -37,6 +37,7 @@ final class ShowoffScene {
     private final Map<ChunkSectionLayer, VertexRecorder> layers;
     private final List<PlacedBlockEntity> blockEntities;
     private final List<EntityRenderState> entities;
+    private final @Nullable PlayerShowoff player;
     private final @Nullable AABB exactBounds;
     private final boolean strict;
     private AABB bounds;
@@ -47,18 +48,30 @@ final class ShowoffScene {
 
     ShowoffScene(Map<ChunkSectionLayer, VertexRecorder> layers, List<PlacedBlockEntity> blockEntities,
                  List<EntityRenderState> entities, AABB bounds, @Nullable AABB exactBounds) {
-        this(layers, blockEntities, entities, bounds, exactBounds, false);
+        this(layers, blockEntities, entities, bounds, exactBounds, false, null);
     }
 
     ShowoffScene(Map<ChunkSectionLayer, VertexRecorder> layers, List<PlacedBlockEntity> blockEntities,
                  List<EntityRenderState> entities, AABB bounds, @Nullable AABB exactBounds, boolean strict) {
+        this(layers, blockEntities, entities, bounds, exactBounds, strict, null);
+    }
+
+    ShowoffScene(Map<ChunkSectionLayer, VertexRecorder> layers, List<PlacedBlockEntity> blockEntities,
+                 List<EntityRenderState> entities, AABB bounds, @Nullable AABB exactBounds, @Nullable PlayerShowoff player) {
+        this(layers, blockEntities, entities, bounds, exactBounds, false, player);
+    }
+
+    ShowoffScene(Map<ChunkSectionLayer, VertexRecorder> layers, List<PlacedBlockEntity> blockEntities,
+                         List<EntityRenderState> entities, AABB bounds, @Nullable AABB exactBounds,
+                         boolean strict, @Nullable PlayerShowoff player) {
         this.layers = new EnumMap<>(layers);
         this.blockEntities = new ArrayList<>(blockEntities);
         this.entities = new ArrayList<>(entities);
+        this.player = player;
         this.exactBounds = exactBounds;
         this.strict = strict;
         this.bounds = bounds;
-        this.silhouette = exactBounds == null ? List.of() : List.of(bounds);
+        this.silhouette = exactBounds == null && player == null ? List.of() : List.of(bounds);
     }
 
     Vec3 center() {
@@ -70,7 +83,11 @@ final class ShowoffScene {
     }
 
     int revision() {
-        return revision;
+        return revision + (player == null ? 0 : player.revision());
+    }
+
+    @Nullable PlayerShowoff player() {
+        return player;
     }
 
     double measureReach() {
@@ -133,7 +150,7 @@ final class ShowoffScene {
     void render(PoseStack poseStack, MultiBufferSource.BufferSource buffers, CameraRenderState camera) {
         drawLayer(poseStack, buffers, ChunkSectionLayer.SOLID);
         drawLayer(poseStack, buffers, ChunkSectionLayer.CUTOUT);
-        if (!blockEntities.isEmpty() || !entities.isEmpty()) {
+        if (!blockEntities.isEmpty() || !entities.isEmpty() || player != null) {
             drawFeatures(poseStack, camera);
         }
         drawLayer(poseStack, buffers, ChunkSectionLayer.TRANSLUCENT);
@@ -189,6 +206,9 @@ final class ShowoffScene {
                     ModpackAssistant.LOGGER.warn("Dropping {} from the showoff view after it failed to render", state.entityType, e);
                     states.remove();
                 }
+            }
+            if (player != null) {
+                player.render(poseStack, storage, camera);
             }
             features.renderAllFeatures();
         } finally {
