@@ -13,6 +13,12 @@ public final class Messages {
     public static final Msg INVALID_ENUM = msg("failed.invalid_enum", "Unknown value '%s'. Valid values: %s");
     public static final Msg SCAN_SKIPPED = msg("scan.skipped", "Skipped %s chunks that were not loaded when scanned");
     public static final Msg SCAN_LOADED_ONLY = msg("scan.loaded_only", "Only currently loaded chunks will be scanned; terrain will not be generated");
+
+    public static final Msg THROUGHPUT_START = msg("throughput.start", "Generating chunks within radius %s (%s chunks) centered at chunk %s, %s");
+    public static final Msg THROUGHPUT_HEADER = msg("throughput.header", "Chunk throughput: %s chunks total, %s generated, %s already loaded");
+    public static final Msg THROUGHPUT_GENERATED = msg("throughput.generated", "Generated chunks: %s chunks/sec");
+    public static final Msg THROUGHPUT_PER_THREAD = msg("throughput.per_thread", "Per worker thread: %s chunks/sec across %s threads");
+    public static final Msg THROUGHPUT_ELAPSED = msg("throughput.elapsed", "Wall-clock generation time: %s seconds");
     public static final Msg LOCATE_LIMIT = msg("locate.limit", "Found %s matches; retained the nearest %s for the report (max_locate_results)");
     public static final Msg CLIPBOARD_TOO_LARGE = msg("clipboard.too_large", "Output is %s characters; the clipboard limit is %s. Copy fewer items or a smaller source");
     public static final Msg TPD_NO_SAFE_POSITION = msg("tpd.no_safe_position", "No safe supported arrival position found for %s; it was not moved");

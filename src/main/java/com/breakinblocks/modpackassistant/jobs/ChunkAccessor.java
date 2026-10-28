@@ -39,6 +39,14 @@ public final class ChunkAccessor {
         return unloaded;
     }
 
+    public static void requestGeneration(ServerLevel level, ChunkPos pos) {
+        level.getChunkSource().addRegionTicket(TICKET, pos, 0, pos);
+    }
+
+    public static void releaseGeneration(ServerLevel level, ChunkPos pos) {
+        level.getChunkSource().removeRegionTicket(TICKET, pos, 0, pos);
+    }
+
     public static <T> T withChunk(ServerLevel level, ChunkPos pos, Function<LevelChunk, T> action) {
         if (isLoaded(level, pos)) {
             return action.apply(level.getChunk(pos.x, pos.z));
