@@ -23,6 +23,9 @@ import java.util.ArrayDeque;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ForkJoinPool;
 
+/**
+ * @author Asbestosstar
+ */
 public final class ChunkThroughputCommand {
     public static final int MAX_RADIUS = 5000;
     private static final int IN_FLIGHT = 1024;
