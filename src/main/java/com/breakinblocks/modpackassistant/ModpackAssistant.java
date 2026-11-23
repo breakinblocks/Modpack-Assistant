@@ -1,5 +1,6 @@
 package com.breakinblocks.modpackassistant;
 
+import com.breakinblocks.modpackassistant.config.MAClientConfig;
 import com.breakinblocks.modpackassistant.config.MAConfig;
 import com.breakinblocks.modpackassistant.gametest.MAGameTests;
 import com.breakinblocks.modpackassistant.jobs.ChunkAccessor;
@@ -25,5 +26,8 @@ public class ModpackAssistant {
         ChunkAccessor.TICKET_TYPES.register(eventBus);
         MAGameTests.TEST_INSTANCE_TYPES.register(eventBus);
         container.registerConfig(ModConfig.Type.COMMON, MAConfig.SPEC);
+        if (dist.isClient()) {
+            container.registerConfig(ModConfig.Type.CLIENT, MAClientConfig.SPEC);
+        }
     }
 }

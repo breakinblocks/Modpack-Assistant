@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.breakinblocks.modpackassistant.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "BarrierBlockMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -72,6 +72,7 @@ Admin and player (permission level 2 unless noted):
 | `/mpa heal [player]`, `/mpa feed [player]` | Restore health and hunger |
 | `/mpa god [player]` | Toggle invulnerability |
 | `/mpa nightvision` | Toggle permanent night vision |
+| `/mpa showBarriers <on/off>` | Draw barrier blocks as a see-through red cube, or hide them again (needs the mod on the client) |
 | `/mpa tpd <dimension> [targets]` | Move entities to another dimension safely |
 | `/mpa print <source>`, `/mpa hand`, `/mpa copy <source> [format]` | Item data to chat or clipboard (permission configurable) |
 

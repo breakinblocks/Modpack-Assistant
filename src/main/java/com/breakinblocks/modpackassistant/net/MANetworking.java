@@ -23,6 +23,7 @@ public final class MANetworking {
         registrar.playToClient(ShowoffBackgroundPayload.TYPE, ShowoffBackgroundPayload.STREAM_CODEC, ShowoffBackgroundPayload::handle);
         registrar.playToClient(ShowoffScreenshotPayload.TYPE, ShowoffScreenshotPayload.STREAM_CODEC, ShowoffScreenshotPayload::handle);
         registrar.playToClient(ShowoffClosePayload.TYPE, ShowoffClosePayload.STREAM_CODEC, ShowoffClosePayload::handle);
+        registrar.playToClient(ShowBarriersPayload.TYPE, ShowBarriersPayload.STREAM_CODEC, ShowBarriersPayload::handle);
     }
 
     public static boolean sendClipboard(ServerPlayer player, String text) {
@@ -45,6 +46,14 @@ public final class MANetworking {
             return false;
         }
         PacketDistributor.sendToPlayer(player, payload);
+        return true;
+    }
+
+    public static boolean sendShowBarriers(ServerPlayer player, boolean shown) {
+        if (!hasChannel(player, ShowBarriersPayload.TYPE)) {
+            return false;
+        }
+        PacketDistributor.sendToPlayer(player, new ShowBarriersPayload(shown));
         return true;
     }
 

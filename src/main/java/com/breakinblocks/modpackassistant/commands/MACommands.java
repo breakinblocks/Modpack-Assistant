@@ -9,6 +9,7 @@ import com.breakinblocks.modpackassistant.commands.admin.HealCommand;
 import com.breakinblocks.modpackassistant.commands.admin.NightVisionCommand;
 import com.breakinblocks.modpackassistant.commands.admin.OpswordCommand;
 import com.breakinblocks.modpackassistant.commands.admin.RepairCommand;
+import com.breakinblocks.modpackassistant.commands.admin.ShowBarriersCommand;
 import com.breakinblocks.modpackassistant.commands.admin.ToggleDownfallCommand;
 import com.breakinblocks.modpackassistant.commands.admin.TpdCommand;
 import com.breakinblocks.modpackassistant.commands.items.CopyCommand;
@@ -59,6 +60,7 @@ public final class MACommands {
             context -> FeedCommand.build(),
             context -> GodCommand.build(),
             context -> NightVisionCommand.build(),
+            context -> ShowBarriersCommand.build(),
             context -> TpdCommand.build(),
             context -> PrintCommand.build(),
             context -> PrintCommand.buildHand(),
