@@ -7,10 +7,6 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
-import net.minecraft.core.Registry;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
@@ -19,11 +15,13 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.Enchantments;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public final class OpswordCommand {
     public static final int LEVEL = 255;
-    private static final List<ResourceKey<Enchantment>> ENCHANTMENTS = List.of(
+    private static final List<Enchantment> ENCHANTMENTS = List.of(
             Enchantments.SHARPNESS,
             Enchantments.UNBREAKING,
             Enchantments.BANE_OF_ARTHROPODS,
@@ -42,15 +40,13 @@ public final class OpswordCommand {
 
     private static int give(CommandSourceStack source) throws CommandSyntaxException {
         ServerPlayer player = CommandResults.player(source);
-        Registry<Enchantment> registry = source.registryAccess().registryOrThrow(Registries.ENCHANTMENT);
-
         ItemStack sword = new ItemStack(Items.NETHERITE_SWORD);
-        sword.set(DataComponents.CUSTOM_NAME, Messages.OPSWORD_NAME.get());
-        EnchantmentHelper.updateEnchantments(sword, mutable -> {
-            for (ResourceKey<Enchantment> key : ENCHANTMENTS) {
-                mutable.set(registry.getHolderOrThrow(key), LEVEL);
-            }
-        });
+        sword.setHoverName(Messages.OPSWORD_NAME.get());
+        Map<Enchantment, Integer> enchantments = new LinkedHashMap<>();
+        for (Enchantment enchantment : ENCHANTMENTS) {
+            enchantments.put(enchantment, LEVEL);
+        }
+        EnchantmentHelper.setEnchantments(enchantments, sword);
 
         if (!player.getInventory().add(sword)) {
             ItemEntity drop = player.drop(sword, false);

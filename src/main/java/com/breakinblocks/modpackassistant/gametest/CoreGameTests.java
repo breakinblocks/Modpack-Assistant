@@ -15,7 +15,6 @@ import com.breakinblocks.modpackassistant.util.RomanNumerals;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.NonNullList;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
@@ -25,7 +24,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.CraftingBookCategory;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.ShapelessRecipe;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
@@ -34,9 +33,9 @@ import net.minecraft.world.level.storage.loot.LootTable;
 import net.minecraft.world.level.storage.loot.entries.LootItem;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
 import net.minecraft.world.level.storage.loot.predicates.LootItemRandomChanceCondition;
-import net.neoforged.neoforge.common.util.FakePlayerFactory;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.common.util.FakePlayerFactory;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 import java.util.List;
 import java.util.Map;
@@ -98,9 +97,9 @@ public final class CoreGameTests {
             }
         }
         ItemStack damaged = new ItemStack(Items.DIAMOND_PICKAXE);
-        damaged.set(DataComponents.DAMAGE, 7);
+        damaged.setDamageValue(7);
         String plain = OutputFormat.PLAIN.write(List.of(new ItemStack(Items.STONE), new ItemStack(Items.DIRT, 2), stack, damaged), lookup);
-        helper.assertTrue(plain.equals("minecraft:stone\n2 minecraft:dirt\n17 minecraft:stone\nminecraft:diamond_pickaxe[minecraft:damage=7]"),
+        helper.assertTrue(plain.equals("minecraft:stone\n2 minecraft:dirt\n17 minecraft:stone\nminecraft:diamond_pickaxe{Damage:7}"),
                 "plain output should omit single counts and preserve larger counts and components: " + plain);
         helper.succeed();
     }
@@ -119,7 +118,7 @@ public final class CoreGameTests {
         OreScan after = new OreScan(RegionGeometry.minY(level), RegionGeometry.maxY(level));
         after.scanChunk(level.getChunk(chunk.x, chunk.z), chunk);
         helper.assertTrue(after.total() == existing + 5, "expected " + (existing + 5) + " ores, found " + after.total());
-        boolean ironListed = after.ranked().stream().anyMatch(entry -> entry.block().equals(ResourceLocation.withDefaultNamespace("iron_ore")) && entry.count() >= 5);
+        boolean ironListed = after.ranked().stream().anyMatch(entry -> entry.block().equals(new ResourceLocation("iron_ore")) && entry.count() >= 5);
         helper.assertTrue(ironListed, "iron ore should be ranked with at least 5");
         helper.succeed();
     }
@@ -166,12 +165,12 @@ public final class CoreGameTests {
     public static void recipeConflictsAndDuplicates(GameTestHelper helper) {
         var lookup = helper.getLevel().registryAccess();
         NonNullList<Ingredient> inputs = NonNullList.of(Ingredient.EMPTY, Ingredient.of(Items.STONE), Ingredient.of(Items.STONE));
-        RecipeHolder<?> a = new RecipeHolder<>(ModpackAssistant.id("test_a"), new ShapelessRecipe("", CraftingBookCategory.MISC, new ItemStack(Items.DIAMOND), inputs));
-        RecipeHolder<?> b = new RecipeHolder<>(ModpackAssistant.id("test_b"), new ShapelessRecipe("", CraftingBookCategory.MISC, new ItemStack(Items.EMERALD), inputs));
-        RecipeHolder<?> c = new RecipeHolder<>(ModpackAssistant.id("test_c"), new ShapelessRecipe("", CraftingBookCategory.MISC, new ItemStack(Items.DIAMOND), inputs));
+        Recipe<?> a = new ShapelessRecipe(ModpackAssistant.id("test_a"), "", CraftingBookCategory.MISC, new ItemStack(Items.DIAMOND), inputs);
+        Recipe<?> b = new ShapelessRecipe(ModpackAssistant.id("test_b"), "", CraftingBookCategory.MISC, new ItemStack(Items.EMERALD), inputs);
+        Recipe<?> c = new ShapelessRecipe(ModpackAssistant.id("test_c"), "", CraftingBookCategory.MISC, new ItemStack(Items.DIAMOND), inputs);
         NonNullList<Ingredient> other = NonNullList.of(Ingredient.EMPTY, Ingredient.of(Items.DIRT), Ingredient.of(Items.DIRT));
-        RecipeHolder<?> d = new RecipeHolder<>(ModpackAssistant.id("test_d"), new ShapelessRecipe("", CraftingBookCategory.MISC, new ItemStack(Items.DIAMOND), other));
-        RecipeHolder<?> e = new RecipeHolder<>(ModpackAssistant.id("test_e"), new ShapelessRecipe("", CraftingBookCategory.MISC, new ItemStack(Items.DIAMOND), other));
+        Recipe<?> d = new ShapelessRecipe(ModpackAssistant.id("test_d"), "", CraftingBookCategory.MISC, new ItemStack(Items.DIAMOND), other);
+        Recipe<?> e = new ShapelessRecipe(ModpackAssistant.id("test_e"), "", CraftingBookCategory.MISC, new ItemStack(Items.DIAMOND), other);
 
         RecipeConflictFinder finder = new RecipeConflictFinder(lookup);
         finder.prepare(List.of(a, b, c, d, e), null);

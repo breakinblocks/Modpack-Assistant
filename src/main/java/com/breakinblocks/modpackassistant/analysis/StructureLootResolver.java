@@ -1,5 +1,6 @@
 package com.breakinblocks.modpackassistant.analysis;
 
+import net.minecraft.world.level.storage.loot.LootDataType;
 import com.breakinblocks.modpackassistant.config.MAConfig;
 import com.breakinblocks.modpackassistant.util.Messages;
 import com.google.gson.JsonElement;
@@ -27,7 +28,7 @@ import java.util.List;
 import java.util.Set;
 
 public final class StructureLootResolver {
-    public record Found(ResourceKey<LootTable> table, boolean confirmed) {}
+    public record Found(ResourceLocation table, boolean confirmed) {}
     public record Result(List<Found> tables, List<String> tried) {
         public boolean isEmpty() { return tables.isEmpty(); }
     }
@@ -59,11 +60,11 @@ public final class StructureLootResolver {
     public boolean step() {
         if (!initialized) {
             initialized = true;
-            JsonElement encoded = Structure.DIRECT_CODEC.encodeStart(ops, structure.value()).getOrThrow();
+            JsonElement encoded = Structure.DIRECT_CODEC.encodeStart(ops, structure.value()).getOrThrow(false, error -> {});
             if (encoded.isJsonObject() && encoded.getAsJsonObject().has("start_pool")) {
                 JsonElement pool = encoded.getAsJsonObject().get("start_pool");
                 tried.add("template pools and template block entities");
-                if (pool.isJsonPrimitive()) addPool(ResourceLocation.parse(pool.getAsString()));
+                if (pool.isJsonPrimitive()) addPool(new ResourceLocation(pool.getAsString()));
                 else json.add(pool);
             }
             return false;
@@ -73,13 +74,13 @@ public final class StructureLootResolver {
                 inspect(json.remove());
             } else if (blocks != null && blockIndex < blocks.size()) {
                 CompoundTag nbt = blocks.getCompound(blockIndex++).getCompound("nbt");
-                if (nbt.contains("pool", Tag.TAG_STRING)) addPool(ResourceLocation.parse(nbt.getString("pool")));
-                if (nbt.contains("LootTable", Tag.TAG_STRING)) addTable(ResourceLocation.parse(nbt.getString("LootTable")), true);
+                if (nbt.contains("pool", Tag.TAG_STRING)) addPool(new ResourceLocation(nbt.getString("pool")));
+                if (nbt.contains("LootTable", Tag.TAG_STRING)) addTable(new ResourceLocation(nbt.getString("LootTable")), true);
             } else {
                 blocks = null;
                 if (!pools.isEmpty()) {
                     StructureTemplatePool pool = level.registryAccess().registryOrThrow(Registries.TEMPLATE_POOL).get(pools.remove());
-                    if (pool != null) json.add(StructureTemplatePool.DIRECT_CODEC.encodeStart(ops, pool).getOrThrow());
+                    if (pool != null) json.add(StructureTemplatePool.DIRECT_CODEC.encodeStart(ops, pool).getOrThrow(false, error -> {}));
                     return false;
                 }
                 if (!templates.isEmpty()) {
@@ -95,7 +96,7 @@ public final class StructureLootResolver {
                 if (!found.isEmpty() && heuristic == null) return true;
                 if (heuristic == null) {
                     tried.add("loot table ids matching the structure path");
-                    heuristic = level.getServer().reloadableRegistries().getKeys(Registries.LOOT_TABLE).iterator();
+                    heuristic = level.getServer().getLootData().getKeys(LootDataType.TABLE).iterator();
                 }
                 if (!heuristic.hasNext()) return true;
                 ResourceLocation table = heuristic.next();
@@ -112,9 +113,9 @@ public final class StructureLootResolver {
             element.getAsJsonArray().forEach(json::add);
         } else if (element.isJsonObject()) {
             JsonObject object = element.getAsJsonObject();
-            if (object.has("fallback") && object.get("fallback").isJsonPrimitive()) addPool(ResourceLocation.parse(object.get("fallback").getAsString()));
+            if (object.has("fallback") && object.get("fallback").isJsonPrimitive()) addPool(new ResourceLocation(object.get("fallback").getAsString()));
             if (object.has("location") && object.get("location").isJsonPrimitive()) {
-                ResourceLocation template = ResourceLocation.parse(object.get("location").getAsString());
+                ResourceLocation template = new ResourceLocation(object.get("location").getAsString());
                 if (visitedTemplates.add(template)) {
                     if (visitedTemplates.size() > resourceLimit) throw tooComplex();
                     templates.add(template);
@@ -137,7 +138,7 @@ public final class StructureLootResolver {
     private void addTable(ResourceLocation table, boolean confirmed) {
         if (visitedTables.add(table)) {
             if (found.size() >= MAConfig.maxStructureLootChests()) throw tooComplex();
-            found.add(new Found(ResourceKey.create(Registries.LOOT_TABLE, table), confirmed));
+            found.add(new Found(table, confirmed));
         }
     }
 

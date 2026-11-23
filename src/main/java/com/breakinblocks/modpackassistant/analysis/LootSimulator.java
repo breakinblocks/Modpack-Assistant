@@ -106,7 +106,7 @@ public final class LootSimulator {
         while (rolled < end) {
             perRoll.clear();
             List<ItemStack> drops = new ArrayList<>();
-            table.getRandomItemsRaw(new LootContext.Builder(params).withOptionalRandomSource(random).create(Optional.empty()), stack -> {
+            table.getRandomItemsRaw(new LootContext.Builder(params).withOptionalRandomSeed(random.nextLong() | 1L).create(null), stack -> {
                 if (drops.size() >= 10_000) throw new IllegalStateException(Messages.LOOT_OUTPUT_LIMIT.get().getString());
                 drops.add(stack);
             });

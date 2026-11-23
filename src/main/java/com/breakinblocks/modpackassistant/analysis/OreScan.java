@@ -9,7 +9,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
-import net.neoforged.neoforge.common.Tags;
+import net.minecraftforge.common.Tags;
 
 import java.util.ArrayList;
 import java.util.Comparator;

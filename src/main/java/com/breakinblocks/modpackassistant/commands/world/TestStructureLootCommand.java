@@ -137,14 +137,14 @@ public final class TestStructureLootCommand {
             StructureLootResolver.Found found = tables.get(tableIndex);
             if (safety == null) {
                 safety = new LootSafety(level, found.table(), luck);
-                table = level.getServer().reloadableRegistries().getLootTable(found.table());
+                table = level.getServer().getLootData().getLootTable(found.table());
             }
             safety.verifyCurrent();
             if (!safety.complete()) {
                 try {
                     safety.step();
                 } catch (IllegalArgumentException error) {
-                    run.message(Messages.STRUCTLOOT_SKIPPED.get(found.table().location(), error.getMessage()));
+                    run.message(Messages.STRUCTLOOT_SKIPPED.get(found.table(), error.getMessage()));
                     nextTable();
                 }
                 return false;
@@ -152,13 +152,13 @@ public final class TestStructureLootCommand {
             if (loot == null) {
                 built = LootContexts.build(level, origin, player, luck, table.getParamSet());
                 if (!built.ok()) {
-                    run.message(Messages.LOOT_MISSING_PARAMS.get(found.table().location(), String.join(", ", built.missing()), table.getParamSet()));
+                    run.message(Messages.LOOT_MISSING_PARAMS.get(found.table(), String.join(", ", built.missing()), table.getParamSet()));
                     nextTable();
                     return false;
                 }
                 loot = new ArrayList<>();
                 int stackLimit = (limit - gridIndex) * CHEST_SLOTS;
-                table.getRandomItemsRaw(new LootContext.Builder(built.params()).withOptionalRandomSource(random).create(Optional.empty()), stack -> {
+                table.getRandomItemsRaw(new LootContext.Builder(built.params()).withOptionalRandomSeed(random.nextLong() | 1L).create(null), stack -> {
                     if (stack.isEmpty()) return;
                     int left = stack.getCount();
                     while (left > 0) {
@@ -212,8 +212,8 @@ public final class TestStructureLootCommand {
             return;
         }
         List<String> lines = new ArrayList<>();
-        lines.add(found.table().location().getNamespace());
-        String path = found.table().location().getPath();
+        lines.add(found.table().getNamespace());
+        String path = found.table().getPath();
         while (!path.isEmpty() && lines.size() < 3) {
             int cut = Math.min(SIGN_LINE, path.length());
             lines.add(path.substring(0, cut));
@@ -253,7 +253,7 @@ public final class TestStructureLootCommand {
         Run run = new Run(source, "structure loot cleanup", level.dimension());
         run.repeat(() -> {
             if (record.isEmpty()) return true;
-            BlockPos pos = record.positions().getLast();
+            BlockPos pos = record.positions().get(record.positions().size() - 1);
             BlockState state = level.getBlockState(pos);
             if (state.is(Blocks.CHEST) || state.is(Blocks.OAK_WALL_SIGN)) {
                 if (level.getBlockEntity(pos) instanceof Container container) container.clearContent();

@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.20.1-1.0.9
+
+First release for Minecraft 1.20.1 and Forge 47.4, with the same commands as 1.21.1-1.0.9.
+
+### Changed
+
+- Item output from `/mpa print`, `/mpa hand` and `/mpa copy` uses item NBT, since 1.20.1 has no item
+  components. Give strings look like `minecraft:diamond_pickaxe{Damage:7}`, the KubeJS formats use
+  `Item.of(id, count, nbt)` and an `nbt` field, the CraftTweaker format uses `.withTag(...)`, and the
+  JSON and CSV formats name the column `nbt`.
+- Player captures through `ShowoffClient.capture(...)` take 1.20.1 item NBT for `equipment`
+  (`{id: "minecraft:diamond_sword", Count: 1b}`).
+
 ## 1.21.1-1.0.9
 
 ### Added

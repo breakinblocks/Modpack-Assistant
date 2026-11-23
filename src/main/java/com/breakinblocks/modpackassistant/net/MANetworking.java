@@ -1,63 +1,80 @@
 package com.breakinblocks.modpackassistant.net;
 
 import com.breakinblocks.modpackassistant.ModpackAssistant;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.common.util.FakePlayer;
-import net.neoforged.neoforge.network.PacketDistributor;
-import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import net.minecraftforge.common.util.FakePlayer;
+import net.minecraftforge.fml.loading.FMLEnvironment;
+import net.minecraftforge.network.NetworkDirection;
+import net.minecraftforge.network.NetworkRegistry;
+import net.minecraftforge.network.PacketDistributor;
+import net.minecraftforge.network.simple.SimpleChannel;
 
-@EventBusSubscriber(modid = ModpackAssistant.MOD_ID)
+import java.util.function.Function;
+
 public final class MANetworking {
+    private static final String VERSION = "1";
+    private static final SimpleChannel CHANNEL = NetworkRegistry.ChannelBuilder.named(ModpackAssistant.id("main"))
+            .networkProtocolVersion(() -> VERSION)
+            .clientAcceptedVersions(NetworkRegistry.acceptMissingOr(VERSION))
+            .serverAcceptedVersions(NetworkRegistry.acceptMissingOr(VERSION))
+            .simpleChannel();
+    private static int nextId;
+
     private MANetworking() {
     }
 
-    @SubscribeEvent
-    public static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar(ModpackAssistant.MOD_ID).optional();
-        registrar.playToClient(SetClipboardPayload.TYPE, SetClipboardPayload.STREAM_CODEC, SetClipboardPayload::handle);
-        registrar.playToClient(ShowoffOpenPayload.TYPE, ShowoffOpenPayload.STREAM_CODEC, ShowoffOpenPayload::handle);
-        registrar.playToClient(ShowoffViewPayload.TYPE, ShowoffViewPayload.STREAM_CODEC, ShowoffViewPayload::handle);
-        registrar.playToClient(ShowoffBackgroundPayload.TYPE, ShowoffBackgroundPayload.STREAM_CODEC, ShowoffBackgroundPayload::handle);
-        registrar.playToClient(ShowoffScreenshotPayload.TYPE, ShowoffScreenshotPayload.STREAM_CODEC, ShowoffScreenshotPayload::handle);
-        registrar.playToClient(ShowoffClosePayload.TYPE, ShowoffClosePayload.STREAM_CODEC, ShowoffClosePayload::handle);
-        registrar.playToClient(ShowBarriersPayload.TYPE, ShowBarriersPayload.STREAM_CODEC, ShowBarriersPayload::handle);
+    public static void register() {
+        register(SetClipboardPayload.class, SetClipboardPayload::read);
+        register(ShowoffOpenPayload.class, ShowoffOpenPayload::read);
+        register(ShowoffViewPayload.class, ShowoffViewPayload::read);
+        register(ShowoffBackgroundPayload.class, ShowoffBackgroundPayload::read);
+        register(ShowoffScreenshotPayload.class, ShowoffScreenshotPayload::read);
+        register(ShowoffClosePayload.class, buffer -> ShowoffClosePayload.INSTANCE);
+        register(ShowBarriersPayload.class, ShowBarriersPayload::read);
+    }
+
+    private static <T extends MAPayload> void register(Class<T> type, Function<FriendlyByteBuf, T> reader) {
+        CHANNEL.messageBuilder(type, nextId++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(MAPayload::write)
+                .decoder(reader)
+                .consumerMainThread((payload, context) -> {
+                    if (FMLEnvironment.dist.isClient()) {
+                        payload.handle();
+                    }
+                })
+                .add();
     }
 
     public static boolean sendClipboard(ServerPlayer player, String text) {
         if (text.length() > SetClipboardPayload.MAX_TEXT_LENGTH) {
             return false;
         }
-        if (!hasChannel(player, SetClipboardPayload.TYPE)) {
-            return false;
-        }
-        PacketDistributor.sendToPlayer(player, new SetClipboardPayload(text));
-        return true;
+        return send(player, new SetClipboardPayload(text));
     }
 
     public static boolean canShowoff(ServerPlayer player) {
-        return hasChannel(player, ShowoffOpenPayload.TYPE);
+        return hasChannel(player);
     }
 
-    public static boolean sendShowoff(ServerPlayer player, CustomPacketPayload payload) {
-        if (!hasChannel(player, payload.type())) {
-            return false;
-        }
-        PacketDistributor.sendToPlayer(player, payload);
-        return true;
+    public static boolean sendShowoff(ServerPlayer player, MAPayload payload) {
+        return send(player, payload);
     }
 
     public static boolean sendShowBarriers(ServerPlayer player, boolean shown) {
-        if (!hasChannel(player, ShowBarriersPayload.TYPE)) {
+        return send(player, new ShowBarriersPayload(shown));
+    }
+
+    private static boolean send(ServerPlayer player, MAPayload payload) {
+        if (!hasChannel(player)) {
             return false;
         }
-        PacketDistributor.sendToPlayer(player, new ShowBarriersPayload(shown));
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), payload);
         return true;
     }
 
-    private static boolean hasChannel(ServerPlayer player, CustomPacketPayload.Type<?> type) {
-        return !(player instanceof FakePlayer) && player.connection.hasChannel(type);
+    private static boolean hasChannel(ServerPlayer player) {
+        return !(player instanceof FakePlayer) && player.connection != null
+                && CHANNEL.isRemotePresent(player.connection.connection);
     }
 }

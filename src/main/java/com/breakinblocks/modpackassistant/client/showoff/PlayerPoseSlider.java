@@ -41,7 +41,7 @@ final class PlayerPoseSlider extends AbstractSliderButton {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
         if (scrollY == 0.0) {
             return false;
         }

@@ -3,7 +3,7 @@ package com.breakinblocks.modpackassistant.analysis;
 import com.breakinblocks.modpackassistant.config.MAConfig;
 import com.breakinblocks.modpackassistant.util.Messages;
 
-import net.minecraft.core.component.DataComponentPatch;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
@@ -12,8 +12,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.jetbrains.annotations.Nullable;
+
 public final class DropAccumulator {
-    private record Key(Item item, DataComponentPatch components) {}
+    private record Key(Item item, @Nullable CompoundTag tag) {}
     public record Drop(ItemStack stack, long count) {}
     private final Map<Key, Drop> drops = new HashMap<>();
     private final int limit;
@@ -29,7 +31,7 @@ public final class DropAccumulator {
 
     public void add(ItemStack stack) {
         if (stack.isEmpty()) return;
-        Key key = new Key(stack.getItem(), stack.getComponentsPatch());
+        Key key = new Key(stack.getItem(), stack.getTag() == null ? null : stack.getTag().copy());
         Drop previous = drops.get(key);
         if (previous == null && drops.size() >= limit) throw new IllegalStateException(Messages.MINE_VARIANT_LIMIT.get(limit).getString());
         drops.put(key, new Drop(stack.copyWithCount(1), stack.getCount() + (previous == null ? 0 : previous.count())));

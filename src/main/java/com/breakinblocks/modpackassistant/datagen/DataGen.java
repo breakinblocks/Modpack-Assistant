@@ -3,11 +3,11 @@ package com.breakinblocks.modpackassistant.datagen;
 import com.breakinblocks.modpackassistant.ModpackAssistant;
 import net.minecraft.data.DataGenerator;
 import net.minecraft.data.PackOutput;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.data.event.GatherDataEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.data.event.GatherDataEvent;
 
-@EventBusSubscriber(modid = ModpackAssistant.MOD_ID)
+@EventBusSubscriber(modid = ModpackAssistant.MOD_ID, bus = EventBusSubscriber.Bus.MOD)
 public final class DataGen {
     private DataGen() {
     }

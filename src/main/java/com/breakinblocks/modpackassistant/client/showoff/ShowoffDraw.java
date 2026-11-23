@@ -9,7 +9,6 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
-import org.joml.Matrix4fStack;
 import org.joml.Quaternionf;
 import org.joml.Vector4f;
 
@@ -46,9 +45,9 @@ final class ShowoffDraw {
         float[] shaderColor = RenderSystem.getShaderColor().clone();
         RenderSystem.backupProjectionMatrix();
         RenderSystem.setProjectionMatrix(new Matrix4f().setOrtho(0.0F, width, height, 0.0F, -depth, depth), VertexSorting.ORTHOGRAPHIC_Z);
-        Matrix4fStack modelView = RenderSystem.getModelViewStack();
-        modelView.pushMatrix();
-        modelView.identity();
+        PoseStack modelView = RenderSystem.getModelViewStack();
+        modelView.pushPose();
+        modelView.setIdentity();
         RenderSystem.applyModelViewMatrix();
         RenderSystem.setShaderFogStart(Float.MAX_VALUE);
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
@@ -64,7 +63,7 @@ final class ShowoffDraw {
         } finally {
             RenderSystem.setShaderColor(shaderColor[0], shaderColor[1], shaderColor[2], shaderColor[3]);
             RenderSystem.setShaderFogStart(fogStart);
-            modelView.popMatrix();
+            modelView.popPose();
             RenderSystem.applyModelViewMatrix();
             RenderSystem.restoreProjectionMatrix();
         }

@@ -1,34 +1,34 @@
 package com.breakinblocks.modpackassistant.config;
 
 import com.breakinblocks.modpackassistant.grab.GrabFormat;
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 public final class MAConfig {
-    public static final ModConfigSpec SPEC;
+    public static final ForgeConfigSpec SPEC;
 
-    public static final ModConfigSpec.IntValue ITEM_INSPECTION_PERMISSION;
-    public static final ModConfigSpec.IntValue MAX_CLEAR_RADIUS;
-    public static final ModConfigSpec.IntValue MAX_SCAN_RADIUS;
-    public static final ModConfigSpec.IntValue MAX_LOCATE_RESULTS;
-    public static final ModConfigSpec.IntValue MAX_STRUCTURE_LOOT_CHESTS;
-    public static final ModConfigSpec.IntValue MAX_MINING_DROP_VARIANTS;
-    public static final ModConfigSpec.IntValue MAX_DRAIN_BLOCKS;
-    public static final ModConfigSpec.IntValue MAX_GRAB_BLOCKS;
-    public static final ModConfigSpec.IntValue MAX_LOOT_ITERATIONS;
-    public static final ModConfigSpec.IntValue MAX_SIMULATED_TICKS;
-    public static final ModConfigSpec.IntValue MAX_BIOME_SAMPLES;
-    public static final ModConfigSpec.IntValue MAX_BIOME_SAMPLE_RADIUS;
-    public static final ModConfigSpec.ConfigValue<String> REPORT_DIRECTORY;
-    public static final ModConfigSpec.ConfigValue<String> STRUCTURE_DIRECTORY;
-    public static final ModConfigSpec.BooleanValue GRAB_ENTITIES;
-    public static final ModConfigSpec.BooleanValue GRAB_IGNORE_AIR;
-    public static final ModConfigSpec.EnumValue<GrabFormat> GRAB_FORMAT;
-    public static final ModConfigSpec.IntValue MAX_SHOWOFF_BLOCKS;
-    public static final ModConfigSpec.ConfigValue<String> SHOWOFF_DIRECTORY;
-    public static final ModConfigSpec.IntValue JOB_INTERVAL_TICKS;
+    public static final ForgeConfigSpec.IntValue ITEM_INSPECTION_PERMISSION;
+    public static final ForgeConfigSpec.IntValue MAX_CLEAR_RADIUS;
+    public static final ForgeConfigSpec.IntValue MAX_SCAN_RADIUS;
+    public static final ForgeConfigSpec.IntValue MAX_LOCATE_RESULTS;
+    public static final ForgeConfigSpec.IntValue MAX_STRUCTURE_LOOT_CHESTS;
+    public static final ForgeConfigSpec.IntValue MAX_MINING_DROP_VARIANTS;
+    public static final ForgeConfigSpec.IntValue MAX_DRAIN_BLOCKS;
+    public static final ForgeConfigSpec.IntValue MAX_GRAB_BLOCKS;
+    public static final ForgeConfigSpec.IntValue MAX_LOOT_ITERATIONS;
+    public static final ForgeConfigSpec.IntValue MAX_SIMULATED_TICKS;
+    public static final ForgeConfigSpec.IntValue MAX_BIOME_SAMPLES;
+    public static final ForgeConfigSpec.IntValue MAX_BIOME_SAMPLE_RADIUS;
+    public static final ForgeConfigSpec.ConfigValue<String> REPORT_DIRECTORY;
+    public static final ForgeConfigSpec.ConfigValue<String> STRUCTURE_DIRECTORY;
+    public static final ForgeConfigSpec.BooleanValue GRAB_ENTITIES;
+    public static final ForgeConfigSpec.BooleanValue GRAB_IGNORE_AIR;
+    public static final ForgeConfigSpec.EnumValue<GrabFormat> GRAB_FORMAT;
+    public static final ForgeConfigSpec.IntValue MAX_SHOWOFF_BLOCKS;
+    public static final ForgeConfigSpec.ConfigValue<String> SHOWOFF_DIRECTORY;
+    public static final ForgeConfigSpec.IntValue JOB_INTERVAL_TICKS;
 
     static {
-        ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
+        ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
 
         builder.push("permissions");
         ITEM_INSPECTION_PERMISSION = builder

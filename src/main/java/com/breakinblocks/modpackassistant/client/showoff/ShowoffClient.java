@@ -10,20 +10,20 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.resources.PlayerSkin;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
-import net.neoforged.neoforge.client.event.EntityRenderersEvent;
-import net.neoforged.neoforge.client.event.RenderFrameEvent;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
+import net.minecraftforge.client.event.EntityRenderersEvent;
+import net.minecraftforge.event.TickEvent;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
-import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -36,25 +36,31 @@ public final class ShowoffClient {
     private static @Nullable ShowoffSession session;
     private static int background = ShowoffBackground.DEFAULT;
     private static ShowoffView angle = ShowoffView.DEFAULT;
-    private static final Map<PlayerSkin.Model, ShowoffPlayerRenderer> playerRenderers = new EnumMap<>(PlayerSkin.Model.class);
+    private static final Map<Boolean, ShowoffPlayerRenderer> playerRenderers = new HashMap<>();
     private static final Set<CompletableFuture<Path>> pendingSkinCaptures = new HashSet<>();
 
     private ShowoffClient() {
     }
 
-    @SubscribeEvent
-    public static void createPlayerRenderers(EntityRenderersEvent.AddLayers event) {
+    public static void init(IEventBus eventBus) {
+        eventBus.addListener(ShowoffClient::createPlayerRenderers);
+    }
+
+    private static void createPlayerRenderers(EntityRenderersEvent.AddLayers event) {
         playerRenderers.clear();
-        playerRenderers.put(PlayerSkin.Model.WIDE, new ShowoffPlayerRenderer(event.getContext(), false));
-        playerRenderers.put(PlayerSkin.Model.SLIM, new ShowoffPlayerRenderer(event.getContext(), true));
+        playerRenderers.put(false, new ShowoffPlayerRenderer(event.getContext(), false));
+        playerRenderers.put(true, new ShowoffPlayerRenderer(event.getContext(), true));
     }
 
-    static ShowoffPlayerRenderer playerRenderer(PlayerSkin.Model model) {
-        return Objects.requireNonNull(playerRenderers.get(model), "Showoff player renderer has not been initialized: " + model);
+    static ShowoffPlayerRenderer playerRenderer(boolean slim) {
+        return Objects.requireNonNull(playerRenderers.get(slim), "Showoff player renderer has not been initialized: " + (slim ? "slim" : "wide"));
     }
 
     @SubscribeEvent
-    public static void afterFrame(RenderFrameEvent.Post event) {
+    public static void afterFrame(TickEvent.RenderTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) {
+            return;
+        }
         ShowoffMeasure.process();
         ShowoffCapture.process();
     }

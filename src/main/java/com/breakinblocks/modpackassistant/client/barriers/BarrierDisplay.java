@@ -8,11 +8,11 @@ public final class BarrierDisplay {
     }
 
     public static boolean enabled() {
-        return MAClientConfig.SPEC.isLoaded() && MAClientConfig.SHOW_BARRIERS.getAsBoolean();
+        return MAClientConfig.SPEC.isLoaded() && MAClientConfig.SHOW_BARRIERS.get();
     }
 
     public static void set(boolean shown) {
-        if (MAClientConfig.SPEC.isLoaded() && MAClientConfig.SHOW_BARRIERS.getAsBoolean() != shown) {
+        if (MAClientConfig.SPEC.isLoaded() && MAClientConfig.SHOW_BARRIERS.get() != shown) {
             MAClientConfig.SHOW_BARRIERS.set(shown);
             MAClientConfig.SHOW_BARRIERS.save();
         }

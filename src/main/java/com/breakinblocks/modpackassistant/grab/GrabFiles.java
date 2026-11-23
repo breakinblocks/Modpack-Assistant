@@ -11,7 +11,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
-import net.neoforged.fml.loading.FMLPaths;
+import net.minecraftforge.fml.loading.FMLPaths;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -72,7 +72,7 @@ public final class GrabFiles {
 
     public static void writeNbt(Path path, CompoundTag structure) throws IOException {
         Path temporary = path.resolveSibling(path.getFileName() + ".tmp");
-        NbtIo.writeCompressed(structure, temporary);
+        NbtIo.writeCompressed(structure, temporary.toFile());
         Files.move(temporary, path);
     }
 

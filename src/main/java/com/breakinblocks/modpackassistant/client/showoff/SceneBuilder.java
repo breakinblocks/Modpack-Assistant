@@ -40,7 +40,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.client.model.data.ModelData;
+import net.minecraftforge.client.model.data.ModelData;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -258,7 +258,7 @@ final class SceneBuilder {
         try {
             BlockEntity blockEntity = null;
             if (nbt != null && nbt.contains("id")) {
-                blockEntity = BlockEntity.loadStatic(pos, state, nbt, level.registryAccess());
+                blockEntity = BlockEntity.loadStatic(pos, state, nbt);
                 if (strict && blockEntity == null) {
                     throw new IllegalArgumentException("Could not load block entity for " + state);
                 }

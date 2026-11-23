@@ -1,5 +1,6 @@
 package com.breakinblocks.modpackassistant.analysis;
 
+import net.minecraft.world.level.NaturalSpawner;
 import com.breakinblocks.modpackassistant.report.CsvWriter;
 import com.breakinblocks.modpackassistant.report.ReportWriter;
 import net.minecraft.core.BlockPos;
@@ -201,13 +202,13 @@ public final class SpawnSimulator {
         if (!type.canSpawnFarFromPlayer() && distanceSq > (double) (category.getDespawnDistance() * category.getDespawnDistance())) {
             return false;
         }
-        if (!SpawnPlacements.isSpawnPositionOk(type, level, pos)) {
+        if (!NaturalSpawner.isSpawnPositionOk(SpawnPlacements.getPlacementType(type), level, pos, type)) {
             return false;
         }
         if (!SpawnPlacements.checkSpawnRules(type, level, MobSpawnType.NATURAL, pos, random)) {
             return false;
         }
-        return level.noCollision(type.getSpawnAABB(pos.getX() + 0.5D, pos.getY(), pos.getZ() + 0.5D));
+        return level.noCollision(type.getAABB(pos.getX() + 0.5D, pos.getY(), pos.getZ() + 0.5D));
     }
 
     private Mob throwawayMob(EntityType<?> type, BlockPos pos) {

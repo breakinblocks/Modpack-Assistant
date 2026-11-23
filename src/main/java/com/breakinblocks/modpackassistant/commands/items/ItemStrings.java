@@ -1,6 +1,5 @@
 package com.breakinblocks.modpackassistant.commands.items;
 
-import net.minecraft.commands.arguments.item.ItemInput;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.ItemStack;
@@ -18,7 +17,7 @@ public final class ItemStrings {
     }
 
     public static String giveString(ItemStack stack, HolderLookup.Provider lookup) {
-        return new ItemInput(stack.getItemHolder(), stack.getComponentsPatch()).serialize(lookup);
+        return stack.getTag() == null || stack.getTag().isEmpty() ? itemId(stack) : itemId(stack) + stack.getTag();
     }
 
     public static String componentBlock(ItemStack stack, HolderLookup.Provider lookup) {

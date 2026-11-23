@@ -8,16 +8,14 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.resources.DefaultPlayerSkin;
-import net.minecraft.client.resources.PlayerSkin;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.NumericTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.ResolvableProfile;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.block.entity.SkullBlockEntity;
 import org.jetbrains.annotations.Nullable;
 
@@ -59,15 +57,14 @@ final class PlayerShowoff {
         if (profileTag == null) {
             return CompletableFuture.completedFuture(null);
         }
-        ResolvableProfile profile = ResolvableProfile.CODEC.parse(NbtOps.INSTANCE, profileTag)
-                .result().orElseThrow(() -> new IllegalArgumentException("Invalid mannequin profile NBT"));
+        GameProfile profile = profile(profileTag);
         Minecraft minecraft = Minecraft.getInstance();
         return resolve(profile)
                 .thenComposeAsync(gameProfile -> {
                     if (!gameProfile.getProperties().containsKey("textures")) {
                         throw new IllegalStateException("Player skin could not be loaded for " + gameProfile.getName());
                     }
-                    return minecraft.getSkinManager().getOrLoad(gameProfile);
+                    return ShowoffSkin.load(gameProfile);
                 }, minecraft)
                 .orTimeout(SKIN_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .thenAcceptAsync(skin -> {
@@ -91,7 +88,7 @@ final class PlayerShowoff {
 
     void inputChanged() {
         request++;
-        skin(DefaultPlayerSkin.get(Util.NIL_UUID));
+        skin(ShowoffSkin.DEFAULT);
         status = "Enter a username or UUID";
     }
 
@@ -129,7 +126,7 @@ final class PlayerShowoff {
     }
 
     boolean fits(EquipmentSlot slot, ItemStack stack) {
-        return slot.getType() == EquipmentSlot.Type.HAND || player.getEquipmentSlotForItem(stack) == slot;
+        return slot.getType() == EquipmentSlot.Type.HAND || LivingEntity.getEquipmentSlotForItem(stack) == slot;
     }
 
     void lookup(String input) {
@@ -149,18 +146,18 @@ final class PlayerShowoff {
             return;
         }
         Minecraft minecraft = Minecraft.getInstance();
-        skin(DefaultPlayerSkin.get(Util.NIL_UUID));
+        skin(ShowoffSkin.DEFAULT);
         status = "Loading skin...";
         CompletableFuture<Optional<GameProfile>> profileFuture = isUuid
-                ? SkullBlockEntity.fetchGameProfile(parseUuid(value))
-                : SkullBlockEntity.fetchGameProfile(value);
+                ? fetch(parseUuid(value))
+                : fetch(value);
         profileFuture.thenComposeAsync(found -> {
             if (closed || serial != request) {
                 throw new IllegalStateException("Player skin request was superseded");
             }
             GameProfile profile = found.orElseThrow(() -> new IllegalArgumentException("Player profile not found: " + value));
-            skin(DefaultPlayerSkin.get(profile));
-            return minecraft.getSkinManager().getOrLoad(profile);
+            skin(ShowoffSkin.fallback(profile));
+            return ShowoffSkin.load(profile);
         }, minecraft).orTimeout(SKIN_TIMEOUT_SECONDS, TimeUnit.SECONDS).whenCompleteAsync((skin, error) -> {
             if (closed || serial != request) {
                 return;
@@ -178,11 +175,11 @@ final class PlayerShowoff {
     }
 
     void render(PoseStack poseStack, MultiBufferSource buffers) {
-        ShowoffPlayerRenderer renderer = ShowoffClient.playerRenderer(player.getSkin().model());
+        ShowoffPlayerRenderer renderer = ShowoffClient.playerRenderer(player.skin().slim());
         renderer.render(player, 0.0F, 1.0F, poseStack, buffers, LightTexture.FULL_BRIGHT);
     }
 
-    private void skin(PlayerSkin skin) {
+    private void skin(ShowoffSkin skin) {
         player.skin(skin);
         revision++;
     }
@@ -206,8 +203,10 @@ final class PlayerShowoff {
             if (!(equipment.get(key) instanceof CompoundTag itemTag)) {
                 throw new IllegalArgumentException("Mannequin equipment." + key + " must be a compound");
             }
-            ItemStack stack = ItemStack.parse(level.registryAccess(), itemTag)
-                    .orElseThrow(() -> new IllegalArgumentException("Invalid mannequin equipment NBT in " + key));
+            ItemStack stack = ItemStack.of(itemTag);
+            if (stack.isEmpty() && !itemTag.isEmpty()) {
+                throw new IllegalArgumentException("Invalid mannequin equipment NBT in " + key);
+            }
             player.setItemSlot(slot, stack);
         }
     }
@@ -248,15 +247,55 @@ final class PlayerShowoff {
         revision++;
     }
 
-    private static CompletableFuture<GameProfile> resolve(ResolvableProfile profile) {
-        if (profile.properties().containsKey("textures")) {
-            return CompletableFuture.completedFuture(profile.gameProfile());
+    private static GameProfile profile(Tag tag) {
+        if (tag.getId() == Tag.TAG_STRING) {
+            String name = tag.getAsString();
+            if (!name.matches("[A-Za-z0-9_]{1,16}")) {
+                throw new IllegalArgumentException("Invalid mannequin profile name: " + name);
+            }
+            return new GameProfile(null, name);
         }
-        CompletableFuture<Optional<GameProfile>> found = profile.id().isPresent()
-                ? SkullBlockEntity.fetchGameProfile(profile.id().get())
-                : SkullBlockEntity.fetchGameProfile(profile.name().orElseThrow(() -> new IllegalArgumentException("Mannequin profile needs a name or id")));
+        if (!(tag instanceof CompoundTag compound)) {
+            throw new IllegalArgumentException("Invalid mannequin profile NBT");
+        }
+        CompoundTag normalized = compound.copy();
+        if (normalized.contains("name", Tag.TAG_STRING) && !normalized.contains("Name")) {
+            normalized.putString("Name", normalized.getString("name"));
+        }
+        if (normalized.hasUUID("id") && !normalized.hasUUID("Id")) {
+            normalized.putUUID("Id", normalized.getUUID("id"));
+        }
+        GameProfile profile = NbtUtils.readGameProfile(normalized);
+        if (profile == null || (profile.getId() == null && (profile.getName() == null || profile.getName().isEmpty()))) {
+            throw new IllegalArgumentException("Mannequin profile needs a name or id");
+        }
+        return profile;
+    }
+
+    private static CompletableFuture<GameProfile> resolve(GameProfile profile) {
+        if (profile.getProperties().containsKey("textures")) {
+            return CompletableFuture.completedFuture(profile);
+        }
+        CompletableFuture<Optional<GameProfile>> found = profile.getId() != null
+                ? fetch(profile.getId())
+                : fetch(profile.getName());
         return found.thenApply(result -> result.orElseThrow(() -> new IllegalStateException(
-                "Player profile not found: " + profile.name().orElseGet(() -> profile.id().map(UUID::toString).orElse("")))));
+                "Player profile not found: " + (profile.getName() != null ? profile.getName()
+                        : profile.getId() != null ? profile.getId().toString() : ""))));
+    }
+
+    private static CompletableFuture<Optional<GameProfile>> fetch(String name) {
+        CompletableFuture<Optional<GameProfile>> result = new CompletableFuture<>();
+        SkullBlockEntity.updateGameprofile(new GameProfile(null, name), profile -> result.complete(
+                profile != null && profile.getId() != null ? Optional.of(profile) : Optional.empty()));
+        return result;
+    }
+
+    private static CompletableFuture<Optional<GameProfile>> fetch(UUID id) {
+        return CompletableFuture.supplyAsync(() -> {
+            GameProfile profile = Minecraft.getInstance().getMinecraftSessionService().fillProfileProperties(new GameProfile(id, null), true);
+            return profile != null && profile.getName() != null ? Optional.of(profile) : Optional.empty();
+        }, Util.backgroundExecutor());
     }
 
     private static UUID parseUuid(String value) {

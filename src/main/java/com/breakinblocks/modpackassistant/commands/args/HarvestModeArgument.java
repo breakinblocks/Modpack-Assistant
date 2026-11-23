@@ -18,18 +18,18 @@ public final class HarvestModeArgument {
     public enum HarvestMode implements StringRepresentable {
         PLAIN("plain", null, 0),
         SILK_TOUCH("silk_touch", Enchantments.SILK_TOUCH, 1),
-        FORTUNE_1("fortune_1", Enchantments.FORTUNE, 1),
-        FORTUNE_2("fortune_2", Enchantments.FORTUNE, 2),
-        FORTUNE_3("fortune_3", Enchantments.FORTUNE, 3);
+        FORTUNE_1("fortune_1", Enchantments.BLOCK_FORTUNE, 1),
+        FORTUNE_2("fortune_2", Enchantments.BLOCK_FORTUNE, 2),
+        FORTUNE_3("fortune_3", Enchantments.BLOCK_FORTUNE, 3);
 
         public static final Codec<HarvestMode> CODEC = StringRepresentable.fromEnum(HarvestMode::values);
 
         private final String name;
         @Nullable
-        private final ResourceKey<Enchantment> enchantment;
+        private final Enchantment enchantment;
         private final int level;
 
-        HarvestMode(String name, @Nullable ResourceKey<Enchantment> enchantment, int level) {
+        HarvestMode(String name, @Nullable Enchantment enchantment, int level) {
             this.name = name;
             this.enchantment = enchantment;
             this.level = level;
@@ -41,7 +41,7 @@ public final class HarvestModeArgument {
         }
 
         @Nullable
-        public ResourceKey<Enchantment> enchantment() {
+        public Enchantment enchantment() {
             return enchantment;
         }
 

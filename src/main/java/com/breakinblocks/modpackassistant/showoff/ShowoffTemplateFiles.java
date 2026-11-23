@@ -76,7 +76,7 @@ public final class ShowoffTemplateFiles {
     public static CompoundTag read(Path file, MinecraftServer server) throws IOException, CommandSyntaxException {
         CompoundTag raw = file.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(GrabFormat.SNBT_EXTENSION)
                 ? NbtUtils.snbtToStructure(Files.readString(file, StandardCharsets.UTF_8))
-                : NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap());
+                : NbtIo.readCompressed(file.toFile());
         int version = NbtUtils.getDataVersion(raw, DEFAULT_DATA_VERSION);
         StructureTemplate template = new StructureTemplate();
         template.load(server.registryAccess().lookupOrThrow(Registries.BLOCK),

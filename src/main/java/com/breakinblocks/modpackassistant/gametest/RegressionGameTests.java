@@ -20,7 +20,6 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.synchronization.ArgumentTypeInfos;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.NonNullList;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTest;
@@ -42,10 +41,10 @@ import net.minecraft.world.level.biome.MobSpawnSettings;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.storage.loot.LootPool;
 import net.minecraft.world.level.storage.loot.LootTable;
-import net.minecraft.world.level.storage.loot.entries.NestedLootTable;
+import net.minecraft.world.level.storage.loot.entries.LootTableReference;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
@@ -88,12 +87,17 @@ public final class RegressionGameTests {
                 .thenSucceed();
     }
 
-    private static RecipeHolder<?> shapeless(String id, Item result, Ingredient... inputs) {
-        return new RecipeHolder<>(ModpackAssistant.id(id), new ShapelessRecipe("", CraftingBookCategory.MISC,
-                new ItemStack(result), NonNullList.of(Ingredient.EMPTY, inputs)));
+    private static Recipe<?> shapeless(String id, Item result, Ingredient... inputs) {
+        return new ShapelessRecipe(ModpackAssistant.id(id), "", CraftingBookCategory.MISC,
+                new ItemStack(result), NonNullList.of(Ingredient.EMPTY, inputs));
     }
 
-    private static long conflicts(GameTestHelper helper, RecipeHolder<?>... recipes) {
+    private static Recipe<?> shaped(String id, Item result, int width, Ingredient... inputs) {
+        return new ShapedRecipe(ModpackAssistant.id(id), "", CraftingBookCategory.MISC, width, inputs.length / width,
+                NonNullList.of(Ingredient.EMPTY, inputs), new ItemStack(result));
+    }
+
+    private static long conflicts(GameTestHelper helper, Recipe<?>... recipes) {
         RecipeConflictFinder finder = new RecipeConflictFinder(helper.getLevel().registryAccess());
         finder.prepare(List.of(recipes), null);
         finder.buckets().forEach(finder::process);
@@ -109,15 +113,11 @@ public final class RegressionGameTests {
         var reversed = shapeless("reversed", Items.EMERALD, dirt, stone);
         helper.assertTrue(conflicts(helper, broad, ordered) == 1, "flexible ingredient must be reassigned");
         helper.assertTrue(conflicts(helper, broad, reversed) == 1, "ingredient order must not affect conflicts");
-        Map<Character, Ingredient> keys = Map.of('S', stone, 'D', dirt);
-        var shaped = new RecipeHolder<>(ModpackAssistant.id("shaped"), new ShapedRecipe("", CraftingBookCategory.MISC,
-                ShapedRecipePattern.of(keys, "SD"), new ItemStack(Items.DIAMOND)));
-        var mirror = new RecipeHolder<>(ModpackAssistant.id("mirror"), new ShapedRecipe("", CraftingBookCategory.MISC,
-                ShapedRecipePattern.of(keys, "DS"), new ItemStack(Items.EMERALD)));
+        var shaped = shaped("shaped", Items.DIAMOND, 2, stone, dirt);
+        var mirror = shaped("mirror", Items.EMERALD, 2, dirt, stone);
         helper.assertTrue(conflicts(helper, shaped, mirror) == 1, "mirrored shaped recipes must conflict");
         helper.assertTrue(conflicts(helper, shaped, ordered) == 1, "shaped and shapeless recipes must be compared");
-        var withHole = new RecipeHolder<>(ModpackAssistant.id("hole"), new ShapedRecipe("", CraftingBookCategory.MISC,
-                ShapedRecipePattern.of(keys, "S D"), new ItemStack(Items.DIAMOND)));
+        var withHole = shaped("hole", Items.DIAMOND, 3, stone, Ingredient.EMPTY, dirt);
         helper.assertTrue(conflicts(helper, withHole, ordered) == 1, "empty shaped slots must not count as ingredients");
         helper.succeed();
     }
@@ -125,11 +125,11 @@ public final class RegressionGameTests {
     @GameTest(batch = "regression_recipe_budget", template = EMPTY)
     public static void recipeComparisonResumesAtItsBudget(GameTestHelper helper) {
         RecipeConflictFinder finder = new RecipeConflictFinder(helper.getLevel().registryAccess());
-        List<RecipeHolder<?>> recipes = new ArrayList<>();
+        List<Recipe<?>> recipes = new ArrayList<>();
         List<Item> others = BuiltInRegistries.ITEM.stream().filter(item -> item != Items.AIR && item != Items.STONE).limit(100).toList();
         for (int i = 0; i < 100; i++) recipes.add(shapeless("budget_" + i, Items.DIAMOND, Ingredient.of(Items.STONE, others.get(i))));
         finder.prepare(recipes, null);
-        var bucket = finder.buckets().getFirst();
+        var bucket = finder.buckets().get(0);
         helper.assertFalse(finder.processBatch(bucket, 1), "one operation must not process a whole bucket");
         int batches = 1;
         while (!finder.processBatch(bucket, 16)) {
@@ -151,7 +151,7 @@ public final class RegressionGameTests {
                 helper.assertTrue(RunScheduler.cancel(source), "alias should have started a cancellable run");
             }
         }
-        var cleaner = Class.forName("net.neoforged.neoforge.network.filters.CommandTreeCleaner")
+        var cleaner = Class.forName("net.minecraftforge.network.filters.CommandTreeCleaner")
                 .getDeclaredMethod("cleanArgumentTypes", RootCommandNode.class, Predicate.class);
         cleaner.setAccessible(true);
         Predicate<ArgumentType<?>> vanilla = argument -> {
@@ -190,23 +190,23 @@ public final class RegressionGameTests {
     public static void blockSearchRetainsOnlyNearestHits(GameTestHelper helper) {
         List<BlockPos> positions = List.of(new BlockPos(3, 2, 3), new BlockPos(4, 2, 3), new BlockPos(5, 2, 3));
         for (BlockPos pos : positions) helper.setBlock(pos, Blocks.NETHERITE_BLOCK);
-        BlockPos origin = helper.absolutePos(positions.getFirst());
+        BlockPos origin = helper.absolutePos(positions.get(0));
         BlockLocator locator = new BlockLocator(Blocks.NETHERITE_BLOCK, Vec3.atCenterOf(origin), 2);
         var chunks = new HashSet<ChunkPos>();
         for (BlockPos pos : positions) chunks.add(new ChunkPos(helper.absolutePos(pos)));
         for (ChunkPos pos : chunks) locator.scanChunk(helper.getLevel().getChunk(pos.x, pos.z), pos);
         helper.assertTrue(locator.total() >= 3 && locator.retained() == 2, "all hits should be counted but only the budget retained");
-        helper.assertTrue(locator.nearest().getFirst().pos().equals(origin), "nearest hit must survive trimming");
+        helper.assertTrue(locator.nearest().get(0).pos().equals(origin), "nearest hit must survive trimming");
         helper.succeed();
     }
 
     @GameTest(batch = "regression_loot_safety", template = EMPTY)
     public static void unsafeLootIsRejectedThroughReferences(GameTestHelper helper) {
         var level = helper.getLevel();
-        var unsafe = ResourceKey.create(Registries.LOOT_TABLE, ResourceLocation.withDefaultNamespace("chests/shipwreck_map"));
-        for (LootTable table : List.of(level.getServer().reloadableRegistries().getLootTable(unsafe),
-                LootTable.lootTable().withPool(LootPool.lootPool().add(NestedLootTable.lootTableReference(unsafe))).build())) {
-            LootSafety safety = new LootSafety(level, ResourceKey.create(Registries.LOOT_TABLE, ModpackAssistant.id("safety_probe")), table, 0);
+        var unsafe = new ResourceLocation("chests/shipwreck_map");
+        for (LootTable table : List.of(level.getServer().getLootData().getLootTable(unsafe),
+                LootTable.lootTable().withPool(LootPool.lootPool().add(LootTableReference.lootTableReference(unsafe))).build())) {
+            LootSafety safety = new LootSafety(level, ModpackAssistant.id("safety_probe"), table, 0);
             boolean rejected = false;
             try {
                 for (int step = 0; step < 100 && !safety.step(); step++) {}
@@ -215,7 +215,7 @@ public final class RegressionGameTests {
             }
             helper.assertTrue(rejected && !safety.complete(), "exploration maps must be rejected before any rolls");
         }
-        var safe = ResourceKey.create(Registries.LOOT_TABLE, ResourceLocation.withDefaultNamespace("chests/village/village_plains_house"));
+        var safe = new ResourceLocation("chests/village/village_plains_house");
         LootSafety safety = new LootSafety(level, safe, 0);
         for (int step = 0; step < 100 && !safety.step(); step++) {}
         helper.assertTrue(safety.complete(), "ordinary village chest loot should be supported");
@@ -242,16 +242,16 @@ public final class RegressionGameTests {
     public static void oversizedClipboardIsRejectedBeforeSending(GameTestHelper helper) throws Exception {
         var player = CoreGameTests.fakePlayer(helper, new BlockPos(8, 1, 8));
         helper.assertFalse(MANetworking.sendClipboard(player, "x".repeat(SetClipboardPayload.MAX_TEXT_LENGTH + 1)), "oversized payload must not be sent");
-        var buffer = Unpooled.buffer();
+        var buffer = new net.minecraft.network.FriendlyByteBuf(Unpooled.buffer());
         try {
             String text = "é".repeat(SetClipboardPayload.MAX_TEXT_LENGTH);
-            SetClipboardPayload.STREAM_CODEC.encode(buffer, new SetClipboardPayload(text));
-            helper.assertTrue(SetClipboardPayload.STREAM_CODEC.decode(buffer).text().equals(text), "boundary payload must round trip");
+            new SetClipboardPayload(text).write(buffer);
+            helper.assertTrue(SetClipboardPayload.read(buffer).text().equals(text), "boundary payload must round trip");
         } finally {
             buffer.release();
         }
         ItemStack stack = new ItemStack(Items.DIAMOND);
-        stack.set(DataComponents.CUSTOM_NAME, Component.literal("x".repeat(SetClipboardPayload.MAX_TEXT_LENGTH)));
+        stack.setHoverName(Component.literal("x".repeat(SetClipboardPayload.MAX_TEXT_LENGTH)));
         player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, stack);
         int result = helper.getLevel().getServer().getCommands().getDispatcher().execute("mpa copy hand", CoreGameTests.source(player));
         helper.assertTrue(result == 0, "oversized clipboard command must report failure");
@@ -282,17 +282,16 @@ public final class RegressionGameTests {
     public static void miningDropsPreserveComponentVariants(GameTestHelper helper) {
         DropAccumulator accumulator = new DropAccumulator();
         ItemStack red = new ItemStack(Items.DIAMOND, 7);
-        red.set(DataComponents.CUSTOM_NAME, Component.literal("red"));
-        red.set(DataComponents.MAX_STACK_SIZE, 1);
+        red.setHoverName(Component.literal("red"));
         ItemStack blue = new ItemStack(Items.DIAMOND, 2);
-        blue.set(DataComponents.CUSTOM_NAME, Component.literal("blue"));
+        blue.setHoverName(Component.literal("blue"));
         accumulator.add(red);
         accumulator.add(red.copyWithCount(3));
         accumulator.add(blue);
         helper.assertTrue(accumulator.total() == 12 && accumulator.ranked().size() == 2, "variants must not merge");
-        var first = accumulator.ranked().getFirst();
-        helper.assertTrue(first.count() == 10 && first.stack().getMaxStackSize() == 1, "count and component-aware stack size must survive");
-        helper.assertTrue(ItemStack.isSameItemSameComponents(first.stack(), red), "representative stack must retain components");
+        var first = accumulator.ranked().get(0);
+        helper.assertTrue(first.count() == 10 && first.stack().getHoverName().getString().equals("red"), "count and name must survive");
+        helper.assertTrue(ItemStack.isSameItemSameTags(first.stack(), red), "representative stack must retain components");
         DropAccumulator limited = new DropAccumulator(1);
         limited.add(red);
         boolean rejected = false;
@@ -337,7 +336,7 @@ public final class RegressionGameTests {
         helper.assertTrue(dispatcher.execute("mpa kill items", source) == 0, "overlapping run should be refused");
         helper.runAfterDelay(6, () -> {
             long removed = entities.stream().filter(Creeper::isRemoved).count();
-            helper.assertTrue(removed > 0 && removed <= 128, "one batch must remove at most 128 entities");
+            helper.assertTrue(removed > 0 && removed <= 128, "one batch must remove at most 128 entities, removed " + removed);
             helper.assertTrue(RunScheduler.cancel(source), "partial kill should remain cancellable");
             entities.forEach(Creeper::discard);
             helper.succeed();

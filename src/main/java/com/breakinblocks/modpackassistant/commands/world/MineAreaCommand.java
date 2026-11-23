@@ -37,7 +37,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.neoforged.neoforge.common.Tags;
+import net.minecraftforge.common.Tags;
 
 import java.text.DecimalFormat;
 import java.util.List;
@@ -72,8 +72,7 @@ public final class MineAreaCommand {
 
         ItemStack tool = new ItemStack(Items.NETHERITE_PICKAXE);
         if (mode.enchantment() != null) {
-            var holder = source.registryAccess().registryOrThrow(Registries.ENCHANTMENT).getHolderOrThrow(mode.enchantment());
-            EnchantmentHelper.updateEnchantments(tool, mutable -> mutable.set(holder, mode.level()));
+            tool.enchant(mode.enchantment(), mode.level());
         }
 
         DropAccumulator drops = new DropAccumulator();

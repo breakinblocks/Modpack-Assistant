@@ -1,7 +1,6 @@
 package com.breakinblocks.modpackassistant.data;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -20,30 +19,29 @@ import java.util.List;
 
 public final class TestLootPlacements extends SavedData {
     private static final String NAME = "modpackassistant_test_loot";
-    private static final Factory<TestLootPlacements> FACTORY = new Factory<>(TestLootPlacements::new, TestLootPlacements::load, null);
 
     @Nullable
     private ResourceKey<Level> dimension;
     private final List<BlockPos> positions = new ArrayList<>();
 
     public static TestLootPlacements get(MinecraftServer server) {
-        return server.overworld().getDataStorage().computeIfAbsent(FACTORY, NAME);
+        return server.overworld().getDataStorage().computeIfAbsent(TestLootPlacements::load, TestLootPlacements::new, NAME);
     }
 
-    private static TestLootPlacements load(CompoundTag tag, HolderLookup.Provider registries) {
+    private static TestLootPlacements load(CompoundTag tag) {
         TestLootPlacements data = new TestLootPlacements();
         if (tag.contains("dimension", Tag.TAG_STRING)) {
-            data.dimension = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(tag.getString("dimension")));
+            data.dimension = ResourceKey.create(Registries.DIMENSION, new ResourceLocation(tag.getString("dimension")));
         }
         ListTag list = tag.getList("positions", Tag.TAG_COMPOUND);
         for (int i = 0; i < list.size(); i++) {
-            NbtUtils.readBlockPos(list.getCompound(i), "pos").ifPresent(data.positions::add);
+            data.positions.add(NbtUtils.readBlockPos(list.getCompound(i).getCompound("pos")));
         }
         return data;
     }
 
     @Override
-    public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
+    public CompoundTag save(CompoundTag tag) {
         if (dimension != null) {
             tag.putString("dimension", dimension.location().toString());
         }

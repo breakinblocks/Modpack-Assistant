@@ -1,5 +1,6 @@
 package com.breakinblocks.modpackassistant.analysis;
 
+import net.minecraft.world.level.storage.loot.LootDataType;
 import com.breakinblocks.modpackassistant.ModpackAssistant;
 import com.breakinblocks.modpackassistant.report.CsvWriter;
 import com.breakinblocks.modpackassistant.report.ReportWriter;
@@ -26,7 +27,7 @@ import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.crafting.RecipeHolder;
+import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.level.storage.loot.LootTable;
 import org.jetbrains.annotations.Nullable;
@@ -56,7 +57,7 @@ public final class ObtainabilityIndex {
 
     public ObtainabilityIndex(ServerLevel level) {
         this.level = level;
-        this.lootTableIds = new ArrayList<>(level.getServer().reloadableRegistries().getKeys(Registries.LOOT_TABLE));
+        this.lootTableIds = new ArrayList<>(level.getServer().getLootData().getKeys(LootDataType.TABLE));
     }
 
     public int lootTableCount() {
@@ -76,25 +77,24 @@ public final class ObtainabilityIndex {
     }
 
     public void indexRecipes() {
-        for (RecipeHolder<?> holder : level.getServer().getRecipeManager().getRecipes()) {
+        for (Recipe<?> holder : level.getServer().getRecipeManager().getRecipes()) {
             try {
-                ItemStack result = holder.value().getResultItem(level.registryAccess());
+                ItemStack result = holder.getResultItem(level.registryAccess());
                 if (!result.isEmpty()) {
                     fromRecipes.add(result.getItem());
                 }
             } catch (Exception e) {
-                ModpackAssistant.LOGGER.debug("Recipe {} has no static result", holder.id());
+                ModpackAssistant.LOGGER.debug("Recipe {} has no static result", holder.getId());
             }
         }
         checked.add("recipe results (" + level.getServer().getRecipeManager().getRecipes().size() + " recipes)");
     }
 
     public void indexLootTables(int from, int to) {
-        DynamicOps<JsonElement> ops = RegistryOps.create(JsonOps.INSTANCE, level.registryAccess());
         for (int i = from; i < Math.min(to, lootTableIds.size()); i++) {
             ResourceLocation id = lootTableIds.get(i);
-            LootTable table = level.getServer().reloadableRegistries().getLootTable(ResourceKey.create(Registries.LOOT_TABLE, id));
-            LootTable.DIRECT_CODEC.encodeStart(ops, table).result().ifPresent(this::walkLootJson);
+            LootTable table = level.getServer().getLootData().getLootTable(id);
+            walkLootJson(LootDataType.TABLE.parser().toJsonTree(table, LootTable.class));
         }
         if (to >= lootTableIds.size()) {
             checked.add("loot tables (" + lootTableIds.size() + " tables, item and tag entries)");
@@ -108,9 +108,9 @@ public final class ObtainabilityIndex {
                 String type = object.get("type").getAsString();
                 String name = object.get("name").getAsString();
                 if (type.equals("minecraft:item") || type.equals("item")) {
-                    BuiltInRegistries.ITEM.getOptional(ResourceLocation.parse(name)).ifPresent(fromLoot::add);
+                    BuiltInRegistries.ITEM.getOptional(new ResourceLocation(name)).ifPresent(fromLoot::add);
                 } else if (type.equals("minecraft:tag") || type.equals("tag")) {
-                    TagKey<Item> tag = TagKey.create(Registries.ITEM, ResourceLocation.parse(name));
+                    TagKey<Item> tag = TagKey.create(Registries.ITEM, new ResourceLocation(name));
                     BuiltInRegistries.ITEM.getTag(tag).ifPresent(set -> set.forEach(holder -> fromLoot.add(holder.value())));
                 }
             }

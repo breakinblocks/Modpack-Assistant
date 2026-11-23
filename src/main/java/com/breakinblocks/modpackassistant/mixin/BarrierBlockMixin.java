@@ -28,7 +28,7 @@ public abstract class BarrierBlockMixin extends Block {
     }
 
     @Override
-    protected boolean skipRendering(BlockState state, BlockState adjacent, Direction direction) {
+    public boolean skipRendering(BlockState state, BlockState adjacent, Direction direction) {
         return (BarrierDisplay.enabled() && adjacent.is(this)) || super.skipRendering(state, adjacent, direction);
     }
 }

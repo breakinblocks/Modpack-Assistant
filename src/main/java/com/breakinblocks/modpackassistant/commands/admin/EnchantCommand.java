@@ -12,14 +12,15 @@ import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.ResourceArgument;
-import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
-import net.minecraft.world.item.enchantment.ItemEnchantments;
+import net.minecraft.world.item.Items;
+
+import java.util.Map;
 
 public final class EnchantCommand {
     public static final int MAX_LEVEL = 255;
@@ -33,10 +34,10 @@ public final class EnchantCommand {
                 .then(Commands.literal("add")
                         .then(Commands.argument("enchantment", ResourceArgument.resource(context, Registries.ENCHANTMENT))
                                 .then(Commands.argument("level", IntegerArgumentType.integer(0, MAX_LEVEL))
-                                        .executes(ctx -> add(ctx, ResourceArgument.getEnchantment(ctx, "enchantment"), IntegerArgumentType.getInteger(ctx, "level"))))))
+                                        .executes(ctx -> add(ctx, ResourceArgument.getResource(ctx, "enchantment", Registries.ENCHANTMENT).value(), IntegerArgumentType.getInteger(ctx, "level"))))))
                 .then(Commands.literal("remove")
                         .then(Commands.argument("enchantment", ResourceArgument.resource(context, Registries.ENCHANTMENT))
-                                .executes(ctx -> remove(ctx, ResourceArgument.getEnchantment(ctx, "enchantment")))));
+                                .executes(ctx -> remove(ctx, ResourceArgument.getResource(ctx, "enchantment", Registries.ENCHANTMENT).value()))));
     }
 
     public static ItemStack heldItem(ServerPlayer player, CommandSourceStack source) throws CommandSyntaxException {
@@ -47,7 +48,7 @@ public final class EnchantCommand {
         return stack;
     }
 
-    private static int add(CommandContext<CommandSourceStack> context, Holder.Reference<Enchantment> enchantment, int level) throws CommandSyntaxException {
+    private static int add(CommandContext<CommandSourceStack> context, Enchantment enchantment, int level) throws CommandSyntaxException {
         CommandSourceStack source = context.getSource();
         ServerPlayer player = CommandResults.player(source);
         ItemStack stack = heldItem(player, source);
@@ -57,33 +58,35 @@ public final class EnchantCommand {
             return remove(context, enchantment);
         }
 
-        ItemEnchantments existing = EnchantmentHelper.getEnchantmentsForCrafting(stack);
-        if (!stack.supportsEnchantment(enchantment)) {
-            return CommandResults.fail(source, Messages.ENCHANT_INCOMPATIBLE.get(itemName, Enchantment.getFullname(enchantment, level), itemName));
+        Map<Enchantment, Integer> existing = EnchantmentHelper.getEnchantments(stack);
+        if (!stack.is(Items.ENCHANTED_BOOK) && !enchantment.canEnchant(stack)) {
+            return CommandResults.fail(source, Messages.ENCHANT_INCOMPATIBLE.get(itemName, enchantment.getFullname(level), itemName));
         }
-        for (Holder<Enchantment> other : existing.keySet()) {
-            if (!other.equals(enchantment) && !Enchantment.areCompatible(other, enchantment)) {
-                return CommandResults.fail(source, Messages.ENCHANT_INCOMPATIBLE.get(itemName, Enchantment.getFullname(enchantment, level), Enchantment.getFullname(other, existing.getLevel(other))));
+        for (Map.Entry<Enchantment, Integer> other : existing.entrySet()) {
+            if (other.getKey() != enchantment && !enchantment.isCompatibleWith(other.getKey())) {
+                return CommandResults.fail(source, Messages.ENCHANT_INCOMPATIBLE.get(itemName, enchantment.getFullname(level), other.getKey().getFullname(other.getValue())));
             }
         }
 
-        EnchantmentHelper.updateEnchantments(stack, mutable -> mutable.set(enchantment, level));
-        return CommandResults.success(source, Messages.ENCHANT_DONE.get(itemName, Enchantment.getFullname(enchantment, level)));
+        existing.put(enchantment, level);
+        EnchantmentHelper.setEnchantments(existing, stack);
+        return CommandResults.success(source, Messages.ENCHANT_DONE.get(itemName, enchantment.getFullname(level)));
     }
 
-    private static int remove(CommandContext<CommandSourceStack> context, Holder.Reference<Enchantment> enchantment) throws CommandSyntaxException {
+    private static int remove(CommandContext<CommandSourceStack> context, Enchantment enchantment) throws CommandSyntaxException {
         CommandSourceStack source = context.getSource();
         ServerPlayer player = CommandResults.player(source);
         ItemStack stack = heldItem(player, source);
         Component itemName = stack.getHoverName();
 
-        ItemEnchantments existing = EnchantmentHelper.getEnchantmentsForCrafting(stack);
-        int level = existing.getLevel(enchantment);
+        Map<Enchantment, Integer> existing = EnchantmentHelper.getEnchantments(stack);
+        int level = existing.getOrDefault(enchantment, 0);
         if (level <= 0) {
-            return CommandResults.fail(source, Messages.ENCHANT_MISSING.get(itemName, Enchantment.getFullname(enchantment, 1)));
+            return CommandResults.fail(source, Messages.ENCHANT_MISSING.get(itemName, enchantment.getFullname(1)));
         }
 
-        EnchantmentHelper.updateEnchantments(stack, mutable -> mutable.set(enchantment, 0));
-        return CommandResults.success(source, Messages.ENCHANT_REMOVED.get(Enchantment.getFullname(enchantment, level), itemName));
+        existing.remove(enchantment);
+        EnchantmentHelper.setEnchantments(existing, stack);
+        return CommandResults.success(source, Messages.ENCHANT_REMOVED.get(enchantment.getFullname(level), itemName));
     }
 }

@@ -109,7 +109,7 @@ public final class StructureGrab {
         }
         BlockPos min = new BlockPos(box.minX(), box.minY(), box.minZ());
         BlockPos max = new BlockPos(box.maxX(), box.maxY(), box.maxZ());
-        AABB bounds = AABB.encapsulatingFullBlocks(min, max);
+        AABB bounds = new AABB(min.getX(), min.getY(), min.getZ(), max.getX() + 1, max.getY() + 1, max.getZ() + 1);
         for (Entity entity : level.getEntitiesOfClass(Entity.class, bounds, found -> !(found instanceof Player))) {
             CompoundTag saved = new CompoundTag();
             entity.save(saved);
@@ -172,7 +172,7 @@ public final class StructureGrab {
     @Nullable
     private static CompoundTag blockEntityTag(ServerLevel level, LevelChunk chunk, BlockPos pos) {
         BlockEntity blockEntity = chunk.getBlockEntity(pos);
-        return blockEntity == null ? null : blockEntity.saveWithId(level.registryAccess());
+        return blockEntity == null ? null : blockEntity.saveWithId();
     }
 
     private static int order(BlockState state, @Nullable CompoundTag nbt) {

@@ -34,8 +34,8 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.phys.AABB;
-import net.neoforged.neoforge.gametest.GameTestHolder;
-import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import net.minecraftforge.gametest.GameTestHolder;
+import net.minecraftforge.gametest.PrefixGameTestTemplate;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -48,6 +48,10 @@ import java.util.stream.Stream;
 public final class CommandGameTests {
     private static final String EMPTY = CoreGameTests.EMPTY;
     private static final int RUN_WAIT = 40;
+
+    private static void assertValueEqual(GameTestHelper helper, int expected, int actual, String name) {
+        helper.assertTrue(expected == actual, "Expected " + name + " to be " + expected + ", but was " + actual);
+    }
 
     private static CommandSourceStack sourceAt(GameTestHelper helper, BlockPos relative) {
         return CoreGameTests.source(CoreGameTests.fakePlayer(helper, relative));
@@ -379,18 +383,18 @@ public final class CommandGameTests {
                         throw new GameTestAssertException("locating the grabbed structure failed: " + e.getMessage());
                     }
                     try {
-                        CompoundTag structure = NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap());
+                        CompoundTag structure = NbtIo.readCompressed(file.toFile());
 
                         ListTag size = structure.getList("size", Tag.TAG_INT);
-                        helper.assertValueEqual(3, size.getInt(0), "structure width");
-                        helper.assertValueEqual(2, size.getInt(1), "structure height");
-                        helper.assertValueEqual(3, size.getInt(2), "structure depth");
+                        assertValueEqual(helper, 3, size.getInt(0), "structure width");
+                        assertValueEqual(helper, 2, size.getInt(1), "structure height");
+                        assertValueEqual(helper, 3, size.getInt(2), "structure depth");
 
                         ListTag blocks = structure.getList("blocks", Tag.TAG_COMPOUND);
-                        helper.assertValueEqual(18, blocks.size(), "captured block count");
+                        assertValueEqual(helper, 18, blocks.size(), "captured block count");
                         helper.assertTrue(structure.getList("palette", Tag.TAG_COMPOUND).size() >= 3,
                                 "palette should hold air, stone and the chest");
-                        helper.assertValueEqual(0, structure.getList("entities", Tag.TAG_COMPOUND).size(),
+                        assertValueEqual(helper, 0, structure.getList("entities", Tag.TAG_COMPOUND).size(),
                                 "entities are off by default");
 
                         CompoundTag chestNbt = null;
@@ -402,8 +406,8 @@ public final class CommandGameTests {
                         }
                         helper.assertTrue(chestNbt != null, "the chest block entity should have been saved");
                         ListTag items = chestNbt.getList("Items", Tag.TAG_COMPOUND);
-                        helper.assertValueEqual(1, items.size(), "saved chest item count");
-                        helper.assertValueEqual(7, items.getCompound(0).getInt("count"), "saved chest stack size");
+                        assertValueEqual(helper, 1, items.size(), "saved chest item count");
+                        assertValueEqual(helper, 7, items.getCompound(0).getInt("Count"), "saved chest stack size");
 
                         String lastId = blocks.getCompound(blocks.size() - 1).getCompound("nbt").getString("id");
                         helper.assertTrue("minecraft:chest".equals(lastId),
@@ -448,8 +452,8 @@ public final class CommandGameTests {
                         helper.assertTrue(snbt.contains("minecraft:gold_block"), "the selected gold block should appear in the snbt");
                         helper.assertTrue(snbt.contains("size:"), "the snbt should carry a size list");
 
-                        CompoundTag structure = NbtIo.readCompressed(nbtFile, NbtAccounter.unlimitedHeap());
-                        helper.assertValueEqual(4, structure.getList("blocks", Tag.TAG_COMPOUND).size(), "captured block count");
+                        CompoundTag structure = NbtIo.readCompressed(nbtFile.toFile());
+                        assertValueEqual(helper, 4, structure.getList("blocks", Tag.TAG_COMPOUND).size(), "captured block count");
                     } catch (IOException e) {
                         throw new GameTestAssertException("reading the grabbed structure failed: " + e.getMessage());
                     } finally {

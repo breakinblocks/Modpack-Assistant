@@ -3,16 +3,15 @@ package com.breakinblocks.modpackassistant.analysis;
 import com.breakinblocks.modpackassistant.util.Messages;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.mojang.serialization.JsonOps;
-import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.RegistryOps;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.server.ReloadableServerRegistries;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.storage.loot.LootDataId;
+import net.minecraft.world.level.storage.loot.LootDataManager;
+import net.minecraft.world.level.storage.loot.LootDataType;
 import net.minecraft.world.level.storage.loot.LootTable;
-import net.minecraft.world.level.storage.loot.functions.LootItemFunctions;
+import net.minecraft.world.level.storage.loot.functions.LootItemFunction;
 import net.minecraft.world.level.storage.loot.predicates.LootItemCondition;
 
 import java.util.ArrayDeque;
@@ -26,66 +25,69 @@ public final class LootSafety {
     private static final int MAX_RESOURCES = 64;
     private static final int MAX_WORK = 10_000;
     private static final Set<String> FUNCTIONS = Set.of(
-            "set_count", "set_item", "set_damage", "set_name", "set_lore", "set_potion", "set_instrument",
-            "set_stew_effect", "limit_count", "explosion_decay", "set_components", "set_custom_data",
-            "set_custom_model_data", "set_banner_pattern", "set_fireworks", "set_firework_explosion",
-            "set_book_cover", "set_written_book_pages", "set_writable_book_pages", "toggle_tooltips",
-            "set_ominous_bottle_amplifier", "set_enchantments", "enchant_randomly", "enchant_with_levels",
-            "set_attributes", "set_loot_table", "sequence", "reference");
+            "set_count", "set_damage", "set_name", "set_lore", "set_potion", "set_instrument",
+            "set_stew_effect", "limit_count", "explosion_decay", "set_nbt", "set_banner_pattern",
+            "set_enchantments", "enchant_randomly", "enchant_with_levels", "set_attributes",
+            "set_loot_table", "reference");
     private static final Set<String> CONDITIONS = Set.of(
             "random_chance", "all_of", "any_of", "inverted", "reference", "time_check",
             "weather_check", "killed_by_player", "survives_explosion");
     private static final Set<String> TYPES = Set.of(
             "item", "empty", "tag", "loot_table", "alternatives", "sequence", "group",
             "constant", "uniform", "binomial", "generic", "chest", "entity", "block", "fishing",
-            "advancement_reward", "advancement_entity", "gift", "barter",
-            "command", "selector", "archaeology", "vault", "equipment", "shearing");
+            "advancement_reward", "advancement_entity", "advancement_location", "gift", "barter",
+            "command", "selector", "archaeology");
 
     private final ServerLevel level;
-    private final ReloadableServerRegistries.Holder registries;
-    private final RegistryOps<JsonElement> ops;
-    private final ResourceKey<LootTable> root;
+    private final LootDataManager lootData;
+    private final ResourceLocation root;
     private final LootTable rootTable;
     private final float luck;
-    private final ArrayDeque<ResourceKey<?>> pending = new ArrayDeque<>();
-    private final Set<ResourceKey<?>> seen = new HashSet<>();
-    private final Map<ResourceKey<?>, JsonElement> resources = new HashMap<>();
+    private final ArrayDeque<LootDataId<?>> pending = new ArrayDeque<>();
+    private final Set<LootDataId<?>> seen = new HashSet<>();
+    private final Map<LootDataId<?>, JsonElement> resources = new HashMap<>();
     private int nodes;
     private boolean complete;
     private long estimatedWork;
 
-    public LootSafety(ServerLevel level, ResourceKey<LootTable> root, float luck) {
-        this(level, root, level.getServer().reloadableRegistries().get().lookupOrThrow(Registries.LOOT_TABLE).get(root)
-                .orElseThrow(() -> new IllegalArgumentException(Messages.UNKNOWN_LOOT_TABLE.get(root.location()).getString())).value(), luck);
+    public LootSafety(ServerLevel level, ResourceLocation root, float luck) {
+        this(level, root, table(level, root), luck);
     }
 
-    public LootSafety(ServerLevel level, ResourceKey<LootTable> root, LootTable table, float luck) {
+    public LootSafety(ServerLevel level, ResourceLocation root, LootTable table, float luck) {
         this.level = level;
-        this.registries = level.getServer().reloadableRegistries();
-        this.ops = RegistryOps.create(JsonOps.INSTANCE, registries.get());
+        this.lootData = level.getServer().getLootData();
         this.root = root;
         this.rootTable = table;
         this.luck = luck;
-        enqueue(root);
+        enqueue(new LootDataId<>(LootDataType.TABLE, root));
+    }
+
+    private static LootTable table(ServerLevel level, ResourceLocation root) {
+        LootTable table = level.getServer().getLootData().getElement(new LootDataId<>(LootDataType.TABLE, root));
+        if (table == null) {
+            throw new IllegalArgumentException(Messages.UNKNOWN_LOOT_TABLE.get(root).getString());
+        }
+        return table;
     }
 
     public boolean step() {
         verifyCurrent();
         if (complete) return true;
-        ResourceKey<?> key = pending.poll();
+        LootDataId<?> key = pending.poll();
         if (key != null) {
             JsonElement value = encode(key);
             resources.put(key, value);
             inspect(value, 0);
         }
         if (!pending.isEmpty()) return false;
-        estimatedWork = cost(root, new HashSet<>(), new HashMap<>());
+        estimatedWork = cost(new LootDataId<>(LootDataType.TABLE, root), new HashSet<>(), new HashMap<>());
         complete = true;
         return true;
     }
 
     public void verifyCurrent() {
-        if (registries != level.getServer().reloadableRegistries()) {
+        if (lootData != level.getServer().getLootData()) {
             throw new IllegalStateException(Messages.LOOT_RELOADED.get().getString());
         }
     }
@@ -98,23 +100,15 @@ public final class LootSafety {
         return (int) Math.max(1, Math.min(LootSimulator.BATCH, 100_000 / Math.max(1, estimatedWork)));
     }
 
-    private JsonElement encode(ResourceKey<?> key) {
-        if (key.isFor(Registries.LOOT_TABLE)) {
-            LootTable table = key.equals(root) ? rootTable : get(Registries.LOOT_TABLE, key.location());
-            return LootTable.DIRECT_CODEC.encodeStart(ops, table).getOrThrow();
-        }
-        if (key.isFor(Registries.ITEM_MODIFIER)) {
-            return LootItemFunctions.ROOT_CODEC.encodeStart(ops, get(Registries.ITEM_MODIFIER, key.location())).getOrThrow();
-        }
-        return LootItemCondition.DIRECT_CODEC.encodeStart(ops, get(Registries.PREDICATE, key.location())).getOrThrow();
+    private JsonElement encode(LootDataId<?> key) {
+        Object value = key.type() == LootDataType.TABLE && key.location().equals(root) ? rootTable : lootData.getElement(key);
+        if (value == null) throw rejected(key.location().toString());
+        Class<?> type = key.type() == LootDataType.TABLE ? LootTable.class
+                : key.type() == LootDataType.MODIFIER ? LootItemFunction.class : LootItemCondition.class;
+        return key.type().parser().toJsonTree(value, type);
     }
 
-    private <T> T get(ResourceKey<? extends Registry<T>> registry, ResourceLocation id) {
-        return registries.get().lookupOrThrow(registry).get(ResourceKey.create(registry, id))
-                .orElseThrow(() -> rejected(id.toString())).value();
-    }
-
-    private void enqueue(ResourceKey<?> key) {
+    private void enqueue(LootDataId<?> key) {
         if (seen.add(key)) {
             if (seen.size() > MAX_RESOURCES) throw rejected(Messages.LOOT_RESOURCE_BUDGET.get().getString());
             pending.add(key);
@@ -130,7 +124,7 @@ public final class LootSafety {
             check(object, "function", FUNCTIONS);
             check(object, "condition", CONDITIONS);
             check(object, "type", TYPES);
-            ResourceKey<?> reference = reference(object);
+            LootDataId<?> reference = reference(object);
             if (reference != null) enqueue(reference);
             for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
                 inspect(entry.getValue(), depth + 1);
@@ -146,25 +140,27 @@ public final class LootSafety {
         }
     }
 
-    private ResourceKey<?> reference(JsonObject object) {
-        if (is(object, "function", "reference")) return ResourceKey.create(Registries.ITEM_MODIFIER, id(object, "name"));
-        if (is(object, "condition", "reference")) return ResourceKey.create(Registries.PREDICATE, id(object, "name"));
-        if (is(object, "type", "loot_table") && object.has("value") && object.get("value").isJsonPrimitive()) {
-            return ResourceKey.create(Registries.LOOT_TABLE, id(object, "value"));
+    private LootDataId<?> reference(JsonObject object) {
+        if (is(object, "function", "reference")) return new LootDataId<>(LootDataType.MODIFIER, id(object, "name"));
+        if (is(object, "condition", "reference")) return new LootDataId<>(LootDataType.PREDICATE, id(object, "name"));
+        if (is(object, "type", "loot_table") && object.has("name") && object.get("name").isJsonPrimitive()) {
+            return new LootDataId<>(LootDataType.TABLE, id(object, "name"));
         }
         return null;
     }
 
     private static boolean is(JsonObject object, String field, String value) {
         return object.has(field) && object.get(field).isJsonPrimitive()
-                && ResourceLocation.parse(object.get(field).getAsString()).equals(ResourceLocation.withDefaultNamespace(value));
+                && new ResourceLocation(value).equals(ResourceLocation.tryParse(object.get(field).getAsString()));
     }
 
-    private static ResourceLocation id(JsonObject object, String field) {
-        return ResourceLocation.parse(object.get(field).getAsString());
+    private ResourceLocation id(JsonObject object, String field) {
+        ResourceLocation id = ResourceLocation.tryParse(object.get(field).getAsString());
+        if (id == null) throw rejected(object.get(field).getAsString());
+        return id;
     }
 
-    private long cost(ResourceKey<?> key, Set<ResourceKey<?>> active, Map<ResourceKey<?>, Long> costs) {
+    private long cost(LootDataId<?> key, Set<LootDataId<?>> active, Map<LootDataId<?>, Long> costs) {
         if (costs.containsKey(key)) return costs.get(key);
         if (!active.add(key)) throw rejected(Messages.LOOT_RECURSIVE.get().getString());
         long result = cost(resources.get(key), active, costs);
@@ -173,18 +169,18 @@ public final class LootSafety {
         return result;
     }
 
-    private long cost(JsonElement element, Set<ResourceKey<?>> active, Map<ResourceKey<?>, Long> costs) {
+    private long cost(JsonElement element, Set<LootDataId<?>> active, Map<LootDataId<?>, Long> costs) {
         long value = 1;
         if (element.isJsonArray()) {
             for (JsonElement child : element.getAsJsonArray()) value = bounded(value + cost(child, active, costs));
         } else if (element.isJsonObject()) {
             JsonObject object = element.getAsJsonObject();
-            for (JsonElement child : object.asMap().values()) value = bounded(value + cost(child, active, costs));
-            ResourceKey<?> reference = reference(object);
+            for (Map.Entry<String, JsonElement> child : object.entrySet()) value = bounded(value + cost(child.getValue(), active, costs));
+            LootDataId<?> reference = reference(object);
             if (reference != null) value = bounded(value + cost(reference, active, costs));
             if (is(object, "type", "tag")) {
                 var tag = net.minecraft.tags.TagKey.create(Registries.ITEM, id(object, "name"));
-                int size = registries.get().lookupOrThrow(Registries.ITEM).get(tag).map(net.minecraft.core.HolderSet::size).orElse(0);
+                int size = BuiltInRegistries.ITEM.getTag(tag).map(set -> set.size()).orElse(0);
                 value = bounded(value + size);
             }
             if (object.has("functions")) value = bounded(value * cost(object.get("functions"), active, costs));
@@ -217,6 +213,6 @@ public final class LootSafety {
     }
 
     private IllegalArgumentException rejected(String reason) {
-        return new IllegalArgumentException(Messages.LOOT_UNSAFE.get(root.location(), reason).getString());
+        return new IllegalArgumentException(Messages.LOOT_UNSAFE.get(root, reason).getString());
     }
 }

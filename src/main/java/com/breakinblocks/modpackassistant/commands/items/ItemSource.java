@@ -1,5 +1,6 @@
 package com.breakinblocks.modpackassistant.commands.items;
 
+import net.minecraft.world.level.block.entity.BlockEntity;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
@@ -10,8 +11,8 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
-import net.neoforged.neoforge.capabilities.Capabilities;
-import net.neoforged.neoforge.items.IItemHandler;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
+import net.minecraftforge.items.IItemHandler;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -111,7 +112,9 @@ public enum ItemSource {
         if (!(hit instanceof BlockHitResult blockHit) || hit.getType() == HitResult.Type.MISS) {
             return items;
         }
-        IItemHandler handler = player.level().getCapability(Capabilities.ItemHandler.BLOCK, blockHit.getBlockPos(), blockHit.getDirection());
+        BlockEntity blockEntity = player.level().getBlockEntity(blockHit.getBlockPos());
+        IItemHandler handler = blockEntity == null ? null
+                : blockEntity.getCapability(ForgeCapabilities.ITEM_HANDLER, blockHit.getDirection()).resolve().orElse(null);
         if (handler == null) {
             return items;
         }

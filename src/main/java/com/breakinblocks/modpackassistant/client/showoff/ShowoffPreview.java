@@ -43,12 +43,13 @@ final class ShowoffPreview implements AutoCloseable {
         RenderSystem.enableBlend();
         RenderSystem.blendFunc(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
         Matrix4f pose = graphics.pose().last().pose();
-        BufferBuilder builder = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-        builder.addVertex(pose, x0, y0, 0.0F).setUv(0.0F, 1.0F);
-        builder.addVertex(pose, x0, y1, 0.0F).setUv(0.0F, 0.0F);
-        builder.addVertex(pose, x1, y1, 0.0F).setUv(1.0F, 0.0F);
-        builder.addVertex(pose, x1, y0, 0.0F).setUv(1.0F, 1.0F);
-        BufferUploader.drawWithShader(builder.buildOrThrow());
+        BufferBuilder builder = Tesselator.getInstance().getBuilder();
+        builder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+        builder.vertex(pose, x0, y0, 0.0F).uv(0.0F, 1.0F).endVertex();
+        builder.vertex(pose, x0, y1, 0.0F).uv(0.0F, 0.0F).endVertex();
+        builder.vertex(pose, x1, y1, 0.0F).uv(1.0F, 0.0F).endVertex();
+        builder.vertex(pose, x1, y0, 0.0F).uv(1.0F, 1.0F).endVertex();
+        BufferUploader.drawWithShader(builder.end());
         RenderSystem.defaultBlendFunc();
         RenderSystem.disableBlend();
     }

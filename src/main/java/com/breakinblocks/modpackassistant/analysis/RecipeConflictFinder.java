@@ -5,13 +5,12 @@ import com.breakinblocks.modpackassistant.report.ReportWriter;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
-import net.minecraft.core.HolderLookup;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
-import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.item.crafting.ShapedRecipe;
 import org.jetbrains.annotations.Nullable;
@@ -30,12 +29,12 @@ import java.util.LinkedHashMap;
 import java.util.stream.IntStream;
 
 public final class RecipeConflictFinder {
-    public record Group(int id, RecipeType<?> type, List<RecipeHolder<?>> recipes, List<ItemStack> results, boolean conflict) {
+    public record Group(int id, RecipeType<?> type, List<Recipe<?>> recipes, List<ItemStack> results, boolean conflict) {
     }
 
     public static final class Bucket {
         final RecipeType<?> type;
-        final List<RecipeHolder<?>> recipes = new ArrayList<>();
+        final List<Recipe<?>> recipes = new ArrayList<>();
         private Work work;
 
         Bucket(RecipeType<?> type) {
@@ -48,14 +47,14 @@ public final class RecipeConflictFinder {
     }
 
     private static final class Prepared {
-        final RecipeHolder<?> holder;
+        final Recipe<?> holder;
         final int width;
         final int[][] slots;
         final int[] occupied;
 
-        Prepared(RecipeHolder<?> holder, int[][] slots) {
+        Prepared(Recipe<?> holder, int[][] slots) {
             this.holder = holder;
-            this.width = holder.value() instanceof ShapedRecipe shaped ? shaped.getWidth() : -1;
+            this.width = holder instanceof ShapedRecipe shaped ? shaped.getWidth() : -1;
             this.slots = slots;
             this.occupied = IntStream.range(0, slots.length).filter(i -> slots[i] != null).toArray();
         }
@@ -85,15 +84,15 @@ public final class RecipeConflictFinder {
     }
 
     private static final class Members {
-        final List<RecipeHolder<?>> recipes = new ArrayList<>();
+        final List<Recipe<?>> recipes = new ArrayList<>();
         final List<ItemStack> results = new ArrayList<>();
         boolean conflict;
 
-        void add(Prepared prepared, HolderLookup.Provider lookup) {
-            ItemStack result = prepared.holder.value().getResultItem(lookup);
+        void add(Prepared prepared, RegistryAccess lookup) {
+            ItemStack result = prepared.holder.getResultItem(lookup);
             if (!results.isEmpty()) {
-                ItemStack first = results.getFirst();
-                conflict |= !ItemStack.isSameItemSameComponents(first, result) || first.getCount() != result.getCount();
+                ItemStack first = results.get(0);
+                conflict |= !ItemStack.isSameItemSameTags(first, result) || first.getCount() != result.getCount();
             }
             recipes.add(prepared.holder);
             results.add(result);
@@ -124,7 +123,7 @@ public final class RecipeConflictFinder {
         }
     }
 
-    private final HolderLookup.Provider lookup;
+    private final RegistryAccess lookup;
     private final List<Bucket> buckets = new ArrayList<>();
     private final Map<String, Bucket> byKey = new HashMap<>();
     private final List<ResourceLocation> skipped = new ArrayList<>();
@@ -132,7 +131,7 @@ public final class RecipeConflictFinder {
     private final Map<Ingredient, int[]> itemIds = new IdentityHashMap<>();
     private int recipeCount;
 
-    public RecipeConflictFinder(HolderLookup.Provider lookup) {
+    public RecipeConflictFinder(RegistryAccess lookup) {
         this.lookup = lookup;
     }
 
@@ -156,18 +155,18 @@ public final class RecipeConflictFinder {
         return groups.stream().filter(group -> !group.conflict()).count();
     }
 
-    public void prepare(Collection<RecipeHolder<?>> recipes, @Nullable RecipeType<?> filter) {
+    public void prepare(Collection<Recipe<?>> recipes, @Nullable RecipeType<?> filter) {
         recipes.forEach(holder -> addRecipe(holder, filter));
     }
 
-    public void addRecipe(RecipeHolder<?> holder, @Nullable RecipeType<?> filter) {
-        Recipe<?> recipe = holder.value();
+    public void addRecipe(Recipe<?> holder, @Nullable RecipeType<?> filter) {
+        Recipe<?> recipe = holder;
         if (filter != null && recipe.getType() != filter) return;
         recipeCount++;
         if (recipe.isSpecial() || recipe.getIngredients().isEmpty()
                 || recipe.getIngredients().size() > 81
                 || recipe.getIngredients().stream().anyMatch(ingredient -> !ingredient.isSimple())) {
-            skipped.add(holder.id());
+            skipped.add(holder.getId());
             return;
         }
         long count = recipe.getIngredients().stream().filter(ingredient -> !ingredient.isEmpty()).count();
@@ -210,8 +209,8 @@ public final class RecipeConflictFinder {
     private void prepareNext(Bucket bucket, Work work) {
         int index = work.preparedCount++;
         work.parent[index] = index;
-        RecipeHolder<?> holder = bucket.recipes.get(index);
-        List<Ingredient> ingredients = holder.value().getIngredients();
+        Recipe<?> holder = bucket.recipes.get(index);
+        List<Ingredient> ingredients = holder.getIngredients();
         int[][] slots = new int[ingredients.size()][];
         for (int i = 0; i < slots.length; i++) slots[i] = itemIds(ingredients.get(i));
         Prepared prepared = new Prepared(holder, slots);
@@ -374,7 +373,7 @@ public final class RecipeConflictFinder {
         Object2IntOpenHashMap<String> perMod = new Object2IntOpenHashMap<>();
         for (Group group : groups) {
             Set<String> mods = new TreeSet<>();
-            group.recipes().forEach(holder -> mods.add(holder.id().getNamespace()));
+            group.recipes().forEach(holder -> mods.add(holder.getId().getNamespace()));
             mods.forEach(mod -> perMod.addTo(mod, 1));
         }
         perMod.object2IntEntrySet().stream()
@@ -391,9 +390,9 @@ public final class RecipeConflictFinder {
         for (Group group : selected) {
             lines.add("Group " + group.id() + " [" + BuiltInRegistries.RECIPE_TYPE.getKey(group.type()) + "]");
             for (int i = 0; i < group.recipes().size(); i++) {
-                RecipeHolder<?> holder = group.recipes().get(i);
+                Recipe<?> holder = group.recipes().get(i);
                 ItemStack result = group.results().get(i);
-                lines.add("    " + holder.id() + "  (" + holder.id().getNamespace() + ")  -> " + result.getCount() + "x " + BuiltInRegistries.ITEM.getKey(result.getItem()));
+                lines.add("    " + holder.getId() + "  (" + holder.getId().getNamespace() + ")  -> " + result.getCount() + "x " + BuiltInRegistries.ITEM.getKey(result.getItem()));
             }
         }
     }
@@ -403,10 +402,10 @@ public final class RecipeConflictFinder {
         csv.row("group", "kind", "recipe_type", "recipe", "mod", "result", "result_count");
         for (Group group : groups) {
             for (int i = 0; i < group.recipes().size(); i++) {
-                RecipeHolder<?> holder = group.recipes().get(i);
+                Recipe<?> holder = group.recipes().get(i);
                 ItemStack result = group.results().get(i);
                 csv.row(group.id(), group.conflict() ? "conflict" : "duplicate", BuiltInRegistries.RECIPE_TYPE.getKey(group.type()),
-                        holder.id(), holder.id().getNamespace(), BuiltInRegistries.ITEM.getKey(result.getItem()), result.getCount());
+                        holder.getId(), holder.getId().getNamespace(), BuiltInRegistries.ITEM.getKey(result.getItem()), result.getCount());
             }
         }
         return csv.content();

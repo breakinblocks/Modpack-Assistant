@@ -20,13 +20,15 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.border.WorldBorder;
-import net.minecraft.world.level.portal.DimensionTransition;
+import net.minecraft.world.level.portal.PortalInfo;
+import net.minecraftforge.common.util.ITeleporter;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.function.Function;
 
 public final class TpdCommand {
     private TpdCommand() {
@@ -61,7 +63,7 @@ public final class TpdCommand {
                 progress = player.experienceProgress;
             }
 
-            Entity result = entity.changeDimension(new DimensionTransition(destination, Vec3.atBottomCenterOf(pos), Vec3.ZERO, entity.getYRot(), entity.getXRot(), DimensionTransition.DO_NOTHING));
+            Entity result = moveWithPassengers(entity, destination, Vec3.atBottomCenterOf(pos));
             if (result == null) {
                 source.sendFailure(Messages.TPD_ENTITY_FAILED.get(entity.getDisplayName(), destination.dimension().location()));
                 continue;
@@ -74,6 +76,51 @@ public final class TpdCommand {
         }
         return moved == 0 ? CommandResults.fail(source, Messages.TPD_NONE.get())
                 : CommandResults.success(source, Messages.TPD_DONE.get(moved, destination.dimension().location()), moved);
+    }
+
+    @Nullable
+    private static Entity moveWithPassengers(Entity entity, ServerLevel destination, Vec3 target) {
+        List<Entity> passengers = List.copyOf(entity.getPassengers());
+        entity.ejectPassengers();
+        Entity moved = move(entity, destination, target);
+        if (moved == null) {
+            return null;
+        }
+        for (Entity passenger : passengers) {
+            Entity movedPassenger = moveWithPassengers(passenger, destination, target);
+            if (movedPassenger != null) {
+                movedPassenger.startRiding(moved, true);
+            }
+        }
+        return moved;
+    }
+
+    @Nullable
+    private static Entity move(Entity entity, ServerLevel destination, Vec3 target) {
+        if (entity instanceof ServerPlayer player) {
+            player.teleportTo(destination, target.x, target.y, target.z, player.getYRot(), player.getXRot());
+            return player;
+        }
+        if (entity.level() == destination) {
+            entity.moveTo(target.x, target.y, target.z, entity.getYRot(), entity.getXRot());
+            return entity;
+        }
+        return entity.changeDimension(destination, new ITeleporter() {
+            @Override
+            public Entity placeEntity(Entity original, ServerLevel currentWorld, ServerLevel destWorld, float yaw, Function<Boolean, Entity> repositionEntity) {
+                return repositionEntity.apply(false);
+            }
+
+            @Override
+            public PortalInfo getPortalInfo(Entity original, ServerLevel destWorld, Function<ServerLevel, PortalInfo> defaultPortalInfo) {
+                return new PortalInfo(target, Vec3.ZERO, original.getYRot(), original.getXRot());
+            }
+
+            @Override
+            public boolean playTeleportSound(ServerPlayer player, ServerLevel sourceWorld, ServerLevel destWorld) {
+                return false;
+            }
+        });
     }
 
     @Nullable

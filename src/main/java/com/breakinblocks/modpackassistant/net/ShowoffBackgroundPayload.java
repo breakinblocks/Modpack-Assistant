@@ -1,30 +1,20 @@
 package com.breakinblocks.modpackassistant.net;
 
-import com.breakinblocks.modpackassistant.ModpackAssistant;
 import com.breakinblocks.modpackassistant.client.showoff.ShowoffClient;
-import io.netty.buffer.ByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.neoforged.fml.loading.FMLEnvironment;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraft.network.FriendlyByteBuf;
 
-public record ShowoffBackgroundPayload(int argb) implements CustomPacketPayload {
-    public static final Type<ShowoffBackgroundPayload> TYPE = new Type<>(ModpackAssistant.id("showoff_background"));
-
-    public static final StreamCodec<ByteBuf, ShowoffBackgroundPayload> STREAM_CODEC = StreamCodec.composite(
-            ByteBufCodecs.INT, ShowoffBackgroundPayload::argb,
-            ShowoffBackgroundPayload::new
-    );
-
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
+public record ShowoffBackgroundPayload(int argb) implements MAPayload {
+    public static ShowoffBackgroundPayload read(FriendlyByteBuf buffer) {
+        return new ShowoffBackgroundPayload(buffer.readInt());
     }
 
-    public static void handle(ShowoffBackgroundPayload payload, IPayloadContext context) {
-        if (FMLEnvironment.dist.isClient()) {
-            context.enqueueWork(() -> ShowoffClient.background(payload.argb()));
-        }
+    @Override
+    public void write(FriendlyByteBuf buffer) {
+        buffer.writeInt(argb);
+    }
+
+    @Override
+    public void handle() {
+        ShowoffClient.background(argb);
     }
 }

@@ -1,6 +1,6 @@
 # Modpack Assistant
 
-Server-side commands for modpack development and server administration on NeoForge 1.21.1.
+Server-side commands for modpack development and server administration on Forge 1.20.1.
 World inspection, region editing, loot and spawn simulation, recipe and tag audits, and the usual
 admin conveniences, plus a preview screen for showing off structures and entities. No blocks or
 items. Vanilla clients work with every feature except the showoff preview, which needs the mod on the
@@ -17,7 +17,7 @@ without opening a preview screen:
 
 ```java
 CompletableFuture<Path> image = ShowoffClient.capture(
-        ShowoffSubject.ENTITY, ResourceLocation.parse("minecraft:pig"), new CompoundTag(),
+        ShowoffSubject.ENTITY, new ResourceLocation("minecraft:pig"), new CompoundTag(),
         ShowoffView.DEFAULT, ShowoffBackground.TRANSPARENT, 1024, 1024, output);
 ```
 
@@ -35,10 +35,10 @@ For player captures, supply vanilla item NBT under `equipment` and an optional `
 {
   profile: {name: "TheonlyTazz"},
   equipment: {
-    head: {id: "minecraft:diamond_helmet", count: 1},
-    chest: {id: "minecraft:diamond_chestplate", count: 1},
-    mainhand: {id: "minecraft:diamond_sword", count: 1},
-    offhand: {id: "minecraft:shield", count: 1}
+    head: {id: "minecraft:diamond_helmet", Count: 1b},
+    chest: {id: "minecraft:diamond_chestplate", Count: 1b},
+    mainhand: {id: "minecraft:diamond_sword", Count: 1b},
+    offhand: {id: "minecraft:shield", Count: 1b}
   },
   Pose: {
     Head: [0.0f, 15.0f, 0.0f],
@@ -48,7 +48,7 @@ For player captures, supply vanilla item NBT under `equipment` and an optional `
 }
 ```
 
-Pass this compound as `data` with the ID `minecraft:mannequin`. Minecraft 1.21.1 has no mannequin
+Pass this compound as `data` with the ID `minecraft:mannequin`. Minecraft 1.20.1 has no mannequin
 entity; the ID selects the player model, the same as on the 26.1.2 build, so callers work on both.
 Equipment keys are `head`, `chest`, `legs`, `feet`, `mainhand`, and `offhand`. Pose keys are `Head`,
 `Body`, `LeftArm`, `RightArm`, `LeftLeg`, and `RightLeg`; each contains pitch, yaw, and roll in
@@ -146,10 +146,10 @@ limits. Unloaded chunks and candidates without a loaded 32-block neighborhood ar
 Structure-specific spawn overrides, position-check/finalize-spawn events, and advancing world
 conditions are not simulated; these limitations are recorded in reports.
 
-Mining output retains item components, keeps distinct variants separate, and uses each
+Mining output retains item NBT, keeps distinct variants separate, and uses each
 variant's actual maximum stack size when filling barrels. Chat shows the ten largest yields.
 The simulation fails before placing barrels if it exceeds `max_mining_drop_variants` (default
-10,000), preventing randomly generated components from consuming unlimited memory.
+10,000), preventing randomly generated NBT from consuming unlimited memory.
 
 Structure loot tests resolve pools/templates, validate and roll loot, and place one chest/sign
 pair per placement job. They attempt at most `max_structure_loot_chests` positions (default

@@ -40,7 +40,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import com.breakinblocks.modpackassistant.net.MAPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EntityType;
@@ -249,7 +249,7 @@ public final class ShowoffCommand {
         return control(context, ShowoffClosePayload.INSTANCE, Messages.SHOWOFF_CLOSED.get());
     }
 
-    private static int control(CommandContext<CommandSourceStack> context, CustomPacketPayload payload, Component message)
+    private static int control(CommandContext<CommandSourceStack> context, MAPayload payload, Component message)
             throws CommandSyntaxException {
         CommandSourceStack source = context.getSource();
         ServerPlayer player = CommandResults.player(source);

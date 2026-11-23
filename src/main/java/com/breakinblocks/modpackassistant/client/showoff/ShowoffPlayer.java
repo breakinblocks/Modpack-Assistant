@@ -4,14 +4,13 @@ import com.mojang.authlib.GameProfile;
 import net.minecraft.Util;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.RemotePlayer;
-import net.minecraft.client.resources.DefaultPlayerSkin;
-import net.minecraft.client.resources.PlayerSkin;
+import net.minecraft.resources.ResourceLocation;
 
 final class ShowoffPlayer extends RemotePlayer {
     private static final byte ALL_PARTS = 0x7F;
 
     private final float[][] rotations;
-    private PlayerSkin skin = DefaultPlayerSkin.get(Util.NIL_UUID);
+    private ShowoffSkin skin = ShowoffSkin.DEFAULT;
 
     ShowoffPlayer(ClientLevel level, float[][] rotations) {
         super(level, new GameProfile(Util.NIL_UUID, "Showoff"));
@@ -28,12 +27,26 @@ final class ShowoffPlayer extends RemotePlayer {
         return rotations;
     }
 
-    void skin(PlayerSkin skin) {
+    void skin(ShowoffSkin skin) {
         this.skin = skin;
     }
 
-    @Override
-    public PlayerSkin getSkin() {
+    ShowoffSkin skin() {
         return skin;
+    }
+
+    @Override
+    public ResourceLocation getSkinTextureLocation() {
+        return skin.texture();
+    }
+
+    @Override
+    public String getModelName() {
+        return skin.slim() ? "slim" : "default";
+    }
+
+    @Override
+    public boolean isSkinLoaded() {
+        return true;
     }
 }

@@ -1,8 +1,6 @@
 package com.breakinblocks.modpackassistant.showoff;
 
-import io.netty.buffer.ByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.util.Mth;
 
 public record ShowoffView(float yaw, float pitch, float zoom, float panX, float panY) {
@@ -21,14 +19,17 @@ public record ShowoffView(float yaw, float pitch, float zoom, float panX, float 
 
     public static final ShowoffView DEFAULT = new ShowoffView(DEFAULT_YAW, DEFAULT_PITCH, 1.0F, 0.0F, 0.0F);
 
-    public static final StreamCodec<ByteBuf, ShowoffView> STREAM_CODEC = StreamCodec.composite(
-            ByteBufCodecs.FLOAT, ShowoffView::yaw,
-            ByteBufCodecs.FLOAT, ShowoffView::pitch,
-            ByteBufCodecs.FLOAT, ShowoffView::zoom,
-            ByteBufCodecs.FLOAT, ShowoffView::panX,
-            ByteBufCodecs.FLOAT, ShowoffView::panY,
-            ShowoffView::new
-    );
+    public static ShowoffView read(FriendlyByteBuf buffer) {
+        return new ShowoffView(buffer.readFloat(), buffer.readFloat(), buffer.readFloat(), buffer.readFloat(), buffer.readFloat());
+    }
+
+    public void write(FriendlyByteBuf buffer) {
+        buffer.writeFloat(yaw);
+        buffer.writeFloat(pitch);
+        buffer.writeFloat(zoom);
+        buffer.writeFloat(panX);
+        buffer.writeFloat(panY);
+    }
 
     public ShowoffView {
         yaw = Mth.wrapDegrees(yaw);

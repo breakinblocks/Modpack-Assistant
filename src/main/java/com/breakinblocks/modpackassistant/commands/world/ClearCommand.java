@@ -32,7 +32,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.pattern.BlockInWorld;
-import net.neoforged.neoforge.common.Tags;
+import net.minecraftforge.common.Tags;
 
 import java.util.ArrayList;
 import java.util.List;

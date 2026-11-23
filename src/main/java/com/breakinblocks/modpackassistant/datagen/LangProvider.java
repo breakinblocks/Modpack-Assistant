@@ -4,7 +4,7 @@ import com.breakinblocks.modpackassistant.ModpackAssistant;
 import com.breakinblocks.modpackassistant.util.Messages;
 import com.breakinblocks.modpackassistant.util.RomanNumerals;
 import net.minecraft.data.PackOutput;
-import net.neoforged.neoforge.common.data.LanguageProvider;
+import net.minecraftforge.common.data.LanguageProvider;
 
 public final class LangProvider extends LanguageProvider {
     public static final int MAX_ENCHANT_LEVEL = 255;

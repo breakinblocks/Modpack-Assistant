@@ -4,10 +4,10 @@ import com.breakinblocks.modpackassistant.ModpackAssistant;
 import com.breakinblocks.modpackassistant.config.MAConfig;
 import com.breakinblocks.modpackassistant.util.Messages;
 import net.minecraft.commands.CommandSourceStack;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.server.ServerStoppingEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.event.server.ServerStoppingEvent;
+import net.minecraftforge.event.TickEvent;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Optional;
@@ -63,7 +63,10 @@ public final class RunScheduler {
     }
 
     @SubscribeEvent
-    public static void onTick(ServerTickEvent.Post event) {
+    public static void onTick(TickEvent.ServerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) {
+            return;
+        }
         Run current = active;
         if (current == null) {
             return;

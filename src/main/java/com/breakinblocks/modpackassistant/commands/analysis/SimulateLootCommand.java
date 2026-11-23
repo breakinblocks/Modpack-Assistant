@@ -1,5 +1,6 @@
 package com.breakinblocks.modpackassistant.commands.analysis;
 
+import net.minecraft.world.level.storage.loot.LootDataType;
 import com.breakinblocks.modpackassistant.analysis.LootContexts;
 import com.breakinblocks.modpackassistant.analysis.LootSimulator;
 import com.breakinblocks.modpackassistant.analysis.LootSafety;
@@ -43,7 +44,7 @@ public final class SimulateLootCommand {
                 .then(Commands.argument("iterations", IntegerArgumentType.integer(1))
                         .then(Commands.argument("loot_table", ResourceLocationArgument.id())
                                 .suggests((context, builder) -> SharedSuggestionProvider.suggestResource(
-                                        context.getSource().getServer().reloadableRegistries().getKeys(Registries.LOOT_TABLE), builder))
+                                        context.getSource().getServer().getLootData().getKeys(LootDataType.TABLE), builder))
                                 .executes(context -> simulate(context, 0.0F))
                                 .then(Commands.argument("luck", FloatArgumentType.floatArg())
                                         .executes(context -> simulate(context, FloatArgumentType.getFloat(context, "luck"))))));
@@ -59,11 +60,10 @@ public final class SimulateLootCommand {
         if (iterations > MAConfig.maxLootIterations()) {
             return CommandResults.fail(source, Messages.TOO_MANY_ITERATIONS.get(iterations, MAConfig.maxLootIterations(), "max_loot_iterations"));
         }
-        ResourceKey<LootTable> key = ResourceKey.create(Registries.LOOT_TABLE, tableId);
-        if (!level.getServer().reloadableRegistries().getKeys(Registries.LOOT_TABLE).contains(tableId)) {
+        if (!level.getServer().getLootData().getKeys(LootDataType.TABLE).contains(tableId)) {
             return CommandResults.fail(source, Messages.UNKNOWN_LOOT_TABLE.get(tableId));
         }
-        LootTable table = level.getServer().reloadableRegistries().getLootTable(key);
+        LootTable table = level.getServer().getLootData().getLootTable(tableId);
         LootContexts.Built built = LootContexts.build(level, player.blockPosition(), player, luck, table.getParamSet());
         if (!built.ok()) {
             return CommandResults.fail(source, Messages.LOOT_MISSING_PARAMS.get(tableId, String.join(", ", built.missing()), String.valueOf(table.getParamSet())));
@@ -79,7 +79,7 @@ public final class SimulateLootCommand {
                 .note("assumptions", "independent random source; live world conditions are not advanced between rolls");
 
         Run run = new Run(source, "loot simulation", level.dimension());
-        LootSafety safety = new LootSafety(level, key, luck);
+        LootSafety safety = new LootSafety(level, tableId, luck);
         run.repeat(() -> {
             if (!safety.step()) return false;
             run.repeat(() -> {

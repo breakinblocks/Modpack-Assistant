@@ -187,7 +187,7 @@ final class ShowoffScreen extends Screen {
     }
 
     @Override
-    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    public void renderBackground(GuiGraphics graphics) {
         graphics.fill(0, 0, width, height, BACKDROP);
         graphics.fill(panelLeft, panelTop, panelRight, panelBottom, PANEL);
         graphics.renderOutline(panelLeft, panelTop, panelRight - panelLeft, panelBottom - panelTop, BORDER);
@@ -211,6 +211,7 @@ final class ShowoffScreen extends Screen {
             yawSlider.sync();
             pitchSlider.sync();
         }
+        renderBackground(graphics);
         super.render(graphics, mouseX, mouseY, partialTick);
 
         PlayerShowoff player = session.player();
@@ -257,6 +258,12 @@ final class ShowoffScreen extends Screen {
     @Override
     public void tick() {
         super.tick();
+        if (playerInput != null) {
+            playerInput.tick();
+        }
+        if (pickerSearch != null) {
+            pickerSearch.tick();
+        }
         if (pendingLookupTicks > 0 && --pendingLookupTicks == 0 && session.player() != null) {
             session.player().lookup(pendingLookup);
         }
@@ -363,7 +370,7 @@ final class ShowoffScreen extends Screen {
             equipmentOpen = !equipmentOpen;
             pickerSlot = null;
             if (equipmentOpen) {
-                clearFocus();
+                setFocused(null);
                 rotating = false;
                 panning = false;
             }
@@ -426,7 +433,7 @@ final class ShowoffScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
         if (pickerSlot != null) {
             if (inside(mouseX, mouseY, pickerLeft(), pickerTop(), pickerWidth(), pickerHeight())) {
                 pickerScroll = Math.max(0, Math.min(Math.max(0, pickerRows() - pickerVisibleRows()), pickerScroll - (int) Math.signum(scrollY)));
@@ -438,7 +445,7 @@ final class ShowoffScreen extends Screen {
             session.view(view.withZoom((float) (view.zoom() * Math.pow(ZOOM_STEP, scrollY))));
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        return super.mouseScrolled(mouseX, mouseY, scrollY);
     }
 
     @Override

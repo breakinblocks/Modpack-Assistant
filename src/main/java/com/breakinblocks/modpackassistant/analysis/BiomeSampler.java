@@ -69,7 +69,7 @@ public final class BiomeSampler {
     public void sampleRow(int z) {
         for (int x = center.getX() - radius; x <= center.getX() + radius; x += interval) {
             Holder<Biome> biome = source.getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(y), QuartPos.fromBlock(z), sampler);
-            ResourceLocation id = biome.unwrapKey().map(ResourceKey::location).orElse(ResourceLocation.withDefaultNamespace("unknown"));
+            ResourceLocation id = biome.unwrapKey().map(ResourceKey::location).orElse(new ResourceLocation("unknown"));
             counts.addTo(id, 1);
             samples++;
             BlockPos pos = new BlockPos(x, y, z);

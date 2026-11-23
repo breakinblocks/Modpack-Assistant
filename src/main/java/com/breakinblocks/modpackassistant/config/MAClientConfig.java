@@ -1,14 +1,14 @@
 package com.breakinblocks.modpackassistant.config;
 
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 public final class MAClientConfig {
-    public static final ModConfigSpec SPEC;
+    public static final ForgeConfigSpec SPEC;
 
-    public static final ModConfigSpec.BooleanValue SHOW_BARRIERS;
+    public static final ForgeConfigSpec.BooleanValue SHOW_BARRIERS;
 
     static {
-        ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
+        ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
 
         builder.push("display");
         SHOW_BARRIERS = builder

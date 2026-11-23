@@ -1,30 +1,21 @@
 package com.breakinblocks.modpackassistant.net;
 
-import com.breakinblocks.modpackassistant.ModpackAssistant;
-import io.netty.buffer.ByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.neoforged.fml.loading.FMLEnvironment;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraft.network.FriendlyByteBuf;
 
-public record SetClipboardPayload(String text) implements CustomPacketPayload {
+public record SetClipboardPayload(String text) implements MAPayload {
     public static final int MAX_TEXT_LENGTH = 32_767;
-    public static final Type<SetClipboardPayload> TYPE = new Type<>(ModpackAssistant.id("set_clipboard"));
 
-    public static final StreamCodec<ByteBuf, SetClipboardPayload> STREAM_CODEC = StreamCodec.composite(
-            ByteBufCodecs.stringUtf8(MAX_TEXT_LENGTH), SetClipboardPayload::text,
-            SetClipboardPayload::new
-    );
-
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
+    public static SetClipboardPayload read(FriendlyByteBuf buffer) {
+        return new SetClipboardPayload(buffer.readUtf(MAX_TEXT_LENGTH));
     }
 
-    public static void handle(SetClipboardPayload payload, IPayloadContext context) {
-        if (FMLEnvironment.dist.isClient()) {
-            context.enqueueWork(() -> ClientClipboard.set(payload.text()));
-        }
+    @Override
+    public void write(FriendlyByteBuf buffer) {
+        buffer.writeUtf(text, MAX_TEXT_LENGTH);
+    }
+
+    @Override
+    public void handle() {
+        ClientClipboard.set(text);
     }
 }
