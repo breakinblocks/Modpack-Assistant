@@ -40,7 +40,8 @@ import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.storage.loot.LootTable;
 
 import java.util.ArrayList;
-import java.util.List;
+import java.util.List;
+import net.minecraft.world.level.block.entity.SignTextSlot;
 
 public final class TestStructureLootCommand {
     public static final int MAX_SAMPLES = 16;
@@ -234,11 +235,11 @@ public final class TestStructureLootCommand {
         }
         lines.add(last.toString().trim());
 
-        SignText text = new SignText();
+        SignText.Mutable text = SignText.EMPTY.asMutable();
         for (int i = 0; i < Math.min(4, lines.size()); i++) {
-            text = text.setMessage(i, Component.literal(lines.get(i)));
+            text.setLine(i, Component.literal(lines.get(i)));
         }
-        entity.setText(text, true);
+        entity.setText(text.asImmutable(), SignTextSlot.FRONT);
         entity.setWaxed(true);
     }
 

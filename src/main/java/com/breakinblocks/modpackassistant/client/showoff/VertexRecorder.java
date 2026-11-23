@@ -44,6 +44,11 @@ final class VertexRecorder implements VertexConsumer {
     }
 
     @Override
+    public VertexConsumer setUv3(float u, float v) {
+        return this;
+    }
+
+    @Override
     public VertexConsumer addVertex(float x, float y, float z) {
         if (count == colors.length) {
             grow();

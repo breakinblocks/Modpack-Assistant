@@ -29,7 +29,8 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Optional;
+import net.minecraft.world.attribute.EnvironmentAttributes;
 
 public final class SpawnSimulator {
     public static final int TICKS_PER_JOB = 1;
@@ -66,6 +67,7 @@ public final class SpawnSimulator {
 
     private final ServerLevel level;
     private final Holder<Biome> biome;
+    private final MobSpawnSettings mobSettings;
     private final List<ChunkPos> chunks;
     private final Vec3 playerPos;
     private final int totalTicks;
@@ -78,6 +80,7 @@ public final class SpawnSimulator {
     public SpawnSimulator(ServerLevel level, Holder<Biome> biome, List<ChunkPos> chunks, Vec3 playerPos, int totalTicks) {
         this.level = level;
         this.biome = biome;
+        this.mobSettings = naturalMobSpawns(level, biome);
         this.chunks = chunks;
         this.playerPos = playerPos;
         this.totalTicks = totalTicks;
@@ -146,7 +149,7 @@ public final class SpawnSimulator {
         int spawnedThisChunk = 0;
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         for (int attempt = 0; attempt < GROUP_ATTEMPTS; attempt++) {
-            WeightedList<MobSpawnSettings.SpawnerData> potential = biome.value().getMobSettings().getMobs(category);
+            WeightedList<MobSpawnSettings.SpawnerData> potential = mobSettings.getMobsToSpawn(category);
             Optional<MobSpawnSettings.SpawnerData> picked = potential.getRandom(random);
             if (picked.isEmpty()) {
                 return;
@@ -249,7 +252,13 @@ public final class SpawnSimulator {
     }
 
     public static int groupSize(MobSpawnSettings.SpawnerData data, RandomSource random) {
-        return data.minCount() + random.nextInt(data.maxCount() - data.minCount() + 1);
+        return data.count().sample(random);
+    }
+
+    public static MobSpawnSettings naturalMobSpawns(ServerLevel level, Holder<Biome> biome) {
+        MobSpawnSettings dimension = level.dimensionType().attributes()
+                .applyModifier(EnvironmentAttributes.NATURAL_MOB_SPAWNS, EnvironmentAttributes.NATURAL_MOB_SPAWNS.defaultValue());
+        return biome.value().getModifiedEnvironmentAttributes().applyModifier(EnvironmentAttributes.NATURAL_MOB_SPAWNS, dimension);
     }
 
     private boolean loadedNeighborhood(BlockPos pos) {
@@ -277,7 +286,7 @@ public final class SpawnSimulator {
 
     public String csv(ReportWriter.Context context) {
         CsvWriter csv = new CsvWriter().comments(context.headerLines())
-                .comment("assumptions: the caller is the only player; sampled chunks are the loaded chunks whose surface biome matches; pack attempts use the declared inclusive min/max range and cluster limits; live world time and weather are not advanced; despawning uses the vanilla 1 in 800 per tick rule after 600 ticks for non-persistent categories")
+                .comment("assumptions: the caller is the only player; sampled chunks are the loaded chunks whose surface biome matches; spawn lists are the dimension's natural mob spawns with the biome's applied on top, without timeline changes; pack sizes are sampled from each entry's count and capped by cluster limits; live world time and weather are not advanced; despawning uses the vanilla 1 in 800 per tick rule after 600 ticks for non-persistent categories")
                 .comment("skipped rules: " + String.join("; ", SKIPPED_RULES));
         csv.row("section", "entity_type", "category", "attempts", "individuals", "share_of_category_percent", "mean_pack_size");
         for (TypeStat stat : rankedTypes()) {

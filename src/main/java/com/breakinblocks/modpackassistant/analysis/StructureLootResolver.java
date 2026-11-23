@@ -83,7 +83,7 @@ public final class StructureLootResolver {
                     return false;
                 }
                 if (!templates.isEmpty()) {
-                    var template = level.getStructureManager().get(templates.remove());
+                    var template = level.getStructureTemplateManager().get(templates.remove());
                     if (template.isPresent()) {
                         var size = template.get().getSize();
                         if ((long) size.getX() * size.getY() * size.getZ() > MAConfig.maxDrainBlocks()) throw tooComplex();

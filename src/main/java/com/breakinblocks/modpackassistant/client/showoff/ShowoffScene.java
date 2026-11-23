@@ -4,14 +4,12 @@ import com.breakinblocks.modpackassistant.ModpackAssistant;
 import com.mojang.blaze3d.platform.Lighting;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.SubmitNodeStorage;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
 import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
-import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
@@ -147,16 +145,17 @@ final class ShowoffScene {
         return result;
     }
 
-    void render(PoseStack poseStack, MultiBufferSource.BufferSource buffers, CameraRenderState camera) {
-        drawLayer(poseStack, buffers, ChunkSectionLayer.SOLID);
-        drawLayer(poseStack, buffers, ChunkSectionLayer.CUTOUT);
+    void render(PoseStack poseStack, SubmitNodeCollector collector, CameraRenderState camera) {
+        Minecraft.getInstance().gameRenderer.lighting().setupFor(Lighting.Entry.ENTITY_IN_UI);
+        drawLayer(poseStack, collector, ChunkSectionLayer.SOLID);
+        drawLayer(poseStack, collector, ChunkSectionLayer.CUTOUT);
         if (!blockEntities.isEmpty() || !entities.isEmpty() || player != null) {
-            drawFeatures(poseStack, camera);
+            drawFeatures(poseStack, collector, camera);
         }
-        drawLayer(poseStack, buffers, ChunkSectionLayer.TRANSLUCENT);
+        drawLayer(poseStack, collector, ChunkSectionLayer.TRANSLUCENT);
     }
 
-    private void drawLayer(PoseStack poseStack, MultiBufferSource.BufferSource buffers, ChunkSectionLayer layer) {
+    private void drawLayer(PoseStack poseStack, SubmitNodeCollector collector, ChunkSectionLayer layer) {
         VertexRecorder recorder = layers.get(layer);
         if (recorder == null || recorder.isEmpty()) {
             return;
@@ -166,18 +165,13 @@ final class ShowoffScene {
             case CUTOUT -> RenderTypes.cutoutMovingBlock();
             case TRANSLUCENT -> RenderTypes.translucentMovingBlock();
         };
-        recorder.replay(buffers.getBuffer(type), poseStack.last());
-        buffers.endBatch(type);
+        collector.submitCustomGeometry(poseStack, type, (pose, buffer) -> recorder.replay(buffer, pose));
     }
 
-    private void drawFeatures(PoseStack poseStack, CameraRenderState camera) {
+    private void drawFeatures(PoseStack poseStack, SubmitNodeCollector storage, CameraRenderState camera) {
         Minecraft minecraft = Minecraft.getInstance();
-        minecraft.gameRenderer.getLighting().setupFor(Lighting.Entry.ENTITY_IN_UI);
-        FeatureRenderDispatcher features = minecraft.gameRenderer.getFeatureRenderDispatcher();
-        SubmitNodeStorage storage = features.getSubmitNodeStorage();
-
         BlockEntityRenderDispatcher blockEntityDispatcher = minecraft.getBlockEntityRenderDispatcher();
-        try {
+        {
             Iterator<PlacedBlockEntity> placed = blockEntities.iterator();
             while (placed.hasNext()) {
                 PlacedBlockEntity blockEntity = placed.next();
@@ -210,9 +204,6 @@ final class ShowoffScene {
             if (player != null) {
                 player.render(poseStack, storage, camera);
             }
-            features.renderAllFeatures();
-        } finally {
-            features.clearSubmitNodes();
         }
     }
 

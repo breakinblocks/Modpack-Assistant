@@ -1,6 +1,6 @@
 # Modpack Assistant
 
-Server-side commands for modpack development and server administration on NeoForge 26.1.2.
+Server-side commands for modpack development and server administration on NeoForge 26.3.
 World inspection, region editing, loot and spawn simulation, recipe and tag audits, and the usual
 admin conveniences, plus a preview screen for showing off structures and entities. No blocks or
 items. Vanilla clients work with every feature except the showoff preview, which needs the mod on the
@@ -567,16 +567,13 @@ since the whole template travels to the client and is kept in memory while it is
 
 ## Configuration
 
-`config/modpackassistant-common.toml` holds the permission level for item inspection, the radius,
+`config/modpackassistant-local.toml` holds the permission level for item inspection, the radius,
 iteration, and block caps for each expensive command, the report, structure and showoff screenshot
 directories, the structure grab defaults, the showoff template cap, and the job interval.
 
 ## Development verification
 
-This branch targets Minecraft 26.1.2, NeoForge 26.1.2.73, and Java 25. Run `./gradlew build`,
-`./gradlew runClientData` after message/tag changes, and `./gradlew runGameTestServer` for
-regression tests. GameTests use the isolated `run-gametest-26.1.2` directory; add
-`-x cleanGameTestWorld` to retain its existing test world.
+This branch targets Minecraft 26.3, NeoForge 26.3.0.115, and Java 25.
 
 ## License
 

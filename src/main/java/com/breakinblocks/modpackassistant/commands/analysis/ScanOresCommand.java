@@ -32,7 +32,8 @@ import java.nio.file.Path;
 import java.text.DecimalFormat;
 import java.util.List;
 import java.util.Objects;
-import java.util.OptionalInt;
+import java.util.OptionalInt;
+import net.minecraft.network.chat.TextColor;
 
 public final class ScanOresCommand {
     private static final DecimalFormat PERCENT = new DecimalFormat("0.00");
@@ -122,8 +123,8 @@ public final class ScanOresCommand {
     }
 
     static MutableComponent line(OreScan.Entry entry, int index) {
-        int white = index % 2 == 0 ? Objects.requireNonNull(ChatFormatting.WHITE.getColor()) : ALT_WHITE;
-        int yellow = index % 2 == 0 ? Objects.requireNonNull(ChatFormatting.YELLOW.getColor()) : ALT_YELLOW;
+        int white = index % 2 == 0 ? TextColor.WHITE.getValue() : ALT_WHITE;
+        int yellow = index % 2 == 0 ? TextColor.YELLOW.getValue() : ALT_YELLOW;
         Style bracket = Style.EMPTY.withColor(yellow);
         Style count = bracket.withHoverEvent(new HoverEvent.ShowText(Messages.SCAN_PERCENT.get(PERCENT.format(entry.percent()))));
         return Component.empty()

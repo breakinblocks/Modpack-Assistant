@@ -35,7 +35,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.stream.Stream;
+import java.util.stream.Stream;
+import net.minecraft.world.entity.EntityTypes;
 
 public final class CommandGameTests {
     private CommandGameTests() {
@@ -118,8 +119,8 @@ public final class CommandGameTests {
     }
 
     public static void killAllSkipsProtectedAndPlayers(GameTestHelper helper) {
-        Zombie zombie = helper.spawn(EntityType.ZOMBIE, new BlockPos(4, 1, 4));
-        Minecart cart = helper.spawn(EntityType.MINECART, new BlockPos(6, 1, 4));
+        Zombie zombie = helper.spawn(EntityTypes.ZOMBIE, new BlockPos(4, 1, 4));
+        Minecart cart = helper.spawn(EntityTypes.MINECART, new BlockPos(6, 1, 4));
         ServerPlayer player = CoreGameTests.fakePlayer(helper, new BlockPos(8, 1, 8));
         CoreGameTests.run(helper, CoreGameTests.source(player), "mpa kill all");
         helper.runAfterDelay(10, () -> {
@@ -134,8 +135,8 @@ public final class CommandGameTests {
     }
 
     public static void tpdMovesVehicleWithPassenger(GameTestHelper helper) {
-        Minecart cart = helper.spawn(EntityType.MINECART, new BlockPos(4, 1, 4));
-        Zombie zombie = helper.spawn(EntityType.ZOMBIE, new BlockPos(4, 1, 4));
+        Minecart cart = helper.spawn(EntityTypes.MINECART, new BlockPos(4, 1, 4));
+        Zombie zombie = helper.spawn(EntityTypes.ZOMBIE, new BlockPos(4, 1, 4));
         zombie.startRiding(cart, true, true);
         helper.assertTrue(zombie.isPassenger(), "zombie should be riding the minecart");
         ServerLevel nether = helper.getLevel().getServer().getLevel(Level.NETHER);

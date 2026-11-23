@@ -29,9 +29,9 @@ import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
-import net.minecraft.commands.arguments.ColorArgument;
 import net.minecraft.commands.arguments.CompoundTagArgument;
 import net.minecraft.commands.arguments.HexColorArgument;
+import net.minecraft.commands.arguments.TeamColorArgument;
 import net.minecraft.commands.arguments.IdentifierArgument;
 import net.minecraft.commands.arguments.ResourceArgument;
 import net.minecraft.commands.synchronization.SuggestionProviders;
@@ -96,8 +96,8 @@ public final class ShowoffCommand {
                         .then(Commands.literal("hex")
                                 .then(Commands.argument("rgb", HexColorArgument.hexColor())
                                         .executes(context -> background(context, ShowoffBackground.opaque(HexColorArgument.getHexColor(context, "rgb"))))))
-                        .then(Commands.argument("color", ColorArgument.color())
-                                .executes(context -> background(context, ShowoffBackground.of(ColorArgument.getColor(context, "color"))))))
+                        .then(Commands.argument("color", TeamColorArgument.teamColor())
+                                .executes(context -> background(context, ShowoffBackground.of(TeamColorArgument.getTeamColor(context, "color"))))))
                 .then(Commands.literal("screenshot")
                         .executes(context -> screenshot(context, "", 0, 0))
                         .then(Commands.argument("name", StringArgumentType.word())
@@ -112,7 +112,7 @@ public final class ShowoffCommand {
     }
 
     private static CompletableFuture<Suggestions> suggestTemplates(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
-        return SharedSuggestionProvider.suggestResource(context.getSource().getServer().getStructureManager().listTemplates(), builder);
+        return SharedSuggestionProvider.suggestResource(context.getSource().getServer().getStructureTemplateManager().listTemplates(), builder);
     }
 
     private static CompletableFuture<Suggestions> suggestFiles(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
@@ -125,7 +125,7 @@ public final class ShowoffCommand {
         if (!MANetworking.canShowoff(player)) {
             return CommandResults.fail(source, Messages.SHOWOFF_NO_CLIENT.get(player.getName()));
         }
-        Optional<StructureTemplate> template = source.getServer().getStructureManager().get(id);
+        Optional<StructureTemplate> template = source.getServer().getStructureTemplateManager().get(id);
         if (template.isEmpty()) {
             return CommandResults.fail(source, Messages.SHOWOFF_UNKNOWN_TEMPLATE.get(id.toString()));
         }

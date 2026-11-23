@@ -17,8 +17,8 @@ public final class BarrierDisplay {
             MAClientConfig.SHOW_BARRIERS.save();
         }
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level != null) {
-            minecraft.levelRenderer.allChanged();
+        if (minecraft.levelExtractor != null) {
+            minecraft.levelExtractor.allChanged();
         }
     }
 }

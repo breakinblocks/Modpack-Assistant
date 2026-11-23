@@ -1,15 +1,15 @@
 package com.breakinblocks.modpackassistant.client.showoff;
 
 import com.breakinblocks.modpackassistant.ModpackAssistant;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.GpuTextureView;
-import com.mojang.blaze3d.textures.TextureFormat;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.Projection;
 import net.minecraft.client.renderer.ProjectionMatrixBuffer;
 import net.minecraft.util.Mth;
@@ -86,11 +86,11 @@ final class ShowoffMeasure {
         GpuTextureView depthView;
         try {
             color = device.createTexture(() -> "Showoff measure", GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_COPY_SRC,
-                    TextureFormat.RGBA8, SIZE, SIZE, 1, 1);
+                    GpuFormat.RGBA8_UNORM, SIZE, SIZE, 1, 1);
             resources.color(color);
             colorView = device.createTextureView(color);
             resources.colorView(colorView);
-            TextureFormat depthFormat = Minecraft.getInstance().getMainRenderTarget().getDepthTexture().getFormat();
+            GpuFormat depthFormat = Minecraft.getInstance().gameRenderer.mainRenderTarget().getDepthTexture().getFormat();
             depth = device.createTexture(() -> "Showoff measure depth", GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_DST, depthFormat, SIZE, SIZE, 1, 1);
             resources.depth(depth);
             depthView = device.createTextureView(depth);
@@ -102,32 +102,21 @@ final class ShowoffMeasure {
         CommandEncoder encoder;
         try {
             encoder = device.createCommandEncoder();
-            encoder.clearColorAndDepthTextures(color, 0, depth, 1.0);
+            encoder.clearColorAndDepthTextures(color, ShowoffOffscreen.CLEAR_COLOR, depth, ShowoffOffscreen.CLEAR_DEPTH);
         } catch (RuntimeException e) {
             resources.closeAfterFailure(e);
             throw e;
         }
 
         float scale = (float) (SIZE / (2.0 * attempt.reach()));
-        MultiBufferSource.BufferSource buffers = Minecraft.getInstance().renderBuffers().bufferSource();
         try {
-            buffers.endBatch();
             RenderSystem.backupProjectionMatrix();
-            GpuTextureView previousColor = RenderSystem.outputColorTextureOverride;
-            GpuTextureView previousDepth = RenderSystem.outputDepthTextureOverride;
-            RenderSystem.outputColorTextureOverride = colorView;
-            RenderSystem.outputDepthTextureOverride = depthView;
             try {
-                ShowoffDraw.render(attempt.scene(), rotation, attempt.center(), attempt.reach(), scale, SIZE / 2.0F, SIZE / 2.0F,
-                        SIZE, SIZE, buffers, PROJECTION, projectionBuffer());
+                ShowoffOffscreen.render("Showoff measure", colorView, depthView,
+                        collector -> ShowoffDraw.render(attempt.scene(), rotation, attempt.center(), attempt.reach(), scale, SIZE / 2.0F, SIZE / 2.0F,
+                                SIZE, SIZE, collector, PROJECTION, projectionBuffer()));
             } finally {
-                try {
-                    buffers.endBatch();
-                } finally {
-                    RenderSystem.outputColorTextureOverride = previousColor;
-                    RenderSystem.outputDepthTextureOverride = previousDepth;
-                    RenderSystem.restoreProjectionMatrix();
-                }
+                RenderSystem.restoreProjectionMatrix();
             }
         } catch (RuntimeException e) {
             resources.closeAfterFailure(e);
@@ -137,7 +126,7 @@ final class ShowoffMeasure {
         GpuBuffer readback;
         try {
             readback = device.createBuffer(() -> "Showoff measure readback", GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST,
-                    (long) SIZE * SIZE * color.getFormat().pixelSize());
+                    (long) SIZE * SIZE * color.getFormat().blockSize());
             resources.readback(readback);
         } catch (RuntimeException e) {
             resources.closeAfterFailure(e);
@@ -150,7 +139,7 @@ final class ShowoffMeasure {
                         return;
                     }
                     ViewBounds bounds;
-                    try (GpuBuffer.MappedView mapped = encoder.mapBuffer(readback, true, false)) {
+                    try (GpuBufferSlice.MappedView mapped = readback.map(true, false)) {
                         bounds = scan(mapped.data(), scale);
                     }
                     result.accept(bounds);

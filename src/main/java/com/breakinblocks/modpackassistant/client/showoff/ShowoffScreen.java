@@ -26,7 +26,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.ArrayList;
 import java.util.EnumMap;
-import java.util.Map;
+import java.util.Map;
+import net.minecraft.world.scores.TeamColor;
 
 final class ShowoffScreen extends Screen {
     private static final int BACKDROP = 0xFF000000;
@@ -286,7 +287,7 @@ final class ShowoffScreen extends Screen {
     }
 
     private void extractSwatches(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
-        List<ChatFormatting> swatches = ShowoffBackground.SWATCHES;
+        List<TeamColor> swatches = ShowoffBackground.SWATCHES;
         int background = session.background();
         for (int i = 0; i < swatches.size(); i++) {
             int x = swatchLeft(i);
@@ -303,7 +304,7 @@ final class ShowoffScreen extends Screen {
 
         int hovered = swatchAt(mouseX, mouseY);
         if (hovered >= 0) {
-            graphics.setTooltipForNextFrame(font, Component.literal(swatches.get(hovered).getName()), mouseX, mouseY);
+            graphics.setTooltipForNextFrame(font, Component.literal(swatches.get(hovered).getSerializedName()), mouseX, mouseY);
         }
     }
 

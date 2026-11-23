@@ -6,17 +6,17 @@ import com.breakinblocks.modpackassistant.showoff.ShowoffBackground;
 import com.breakinblocks.modpackassistant.showoff.ShowoffFiles;
 import com.breakinblocks.modpackassistant.showoff.ShowoffView;
 import com.breakinblocks.modpackassistant.util.Messages;
-import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.platform.NativeImage;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.GpuTextureView;
-import com.mojang.blaze3d.textures.TextureFormat;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.device.GpuDevice;
+import com.mojang.renderpearl.api.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.Projection;
 import net.minecraft.client.renderer.ProjectionMatrixBuffer;
 import net.minecraft.network.chat.ClickEvent;
@@ -127,7 +127,7 @@ final class ShowoffCapture {
         GpuDevice device = RenderSystem.getDevice();
         int width = request.width();
         int height = request.height();
-        int maxSize = device.getMaxTextureSize();
+        int maxSize = device.getDeviceInfo().limits().maxTextureSize();
         if (width <= 0 || height <= 0 || (long) width * height > Integer.MAX_VALUE / 4L) {
             throw new IllegalArgumentException("Capture dimensions are invalid");
         }
@@ -146,11 +146,11 @@ final class ShowoffCapture {
         GpuTextureView depthView;
         try {
             color = device.createTexture(() -> "Showoff capture", GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_COPY_SRC | GpuTexture.USAGE_TEXTURE_BINDING,
-                    TextureFormat.RGBA8, width, height, 1, 1);
+                    GpuFormat.RGBA8_UNORM, width, height, 1, 1);
             resources.color(color);
             colorView = device.createTextureView(color);
             resources.colorView(colorView);
-            TextureFormat depthFormat = Minecraft.getInstance().getMainRenderTarget().getDepthTexture().getFormat();
+            GpuFormat depthFormat = Minecraft.getInstance().gameRenderer.mainRenderTarget().getDepthTexture().getFormat();
             depth = device.createTexture(() -> "Showoff capture depth", GpuTexture.USAGE_RENDER_ATTACHMENT | GpuTexture.USAGE_COPY_DST, depthFormat, width, height, 1, 1);
             resources.depth(depth);
             depthView = device.createTextureView(depth);
@@ -162,30 +162,19 @@ final class ShowoffCapture {
         CommandEncoder encoder;
         try {
             encoder = device.createCommandEncoder();
-            encoder.clearColorAndDepthTextures(color, 0, depth, 1.0);
+            encoder.clearColorAndDepthTextures(color, ShowoffOffscreen.CLEAR_COLOR, depth, ShowoffOffscreen.CLEAR_DEPTH);
         } catch (RuntimeException e) {
             resources.closeAfterFailure(e);
             throw e;
         }
 
-        MultiBufferSource.BufferSource buffers = Minecraft.getInstance().renderBuffers().bufferSource();
         try {
-            buffers.endBatch();
             RenderSystem.backupProjectionMatrix();
-            GpuTextureView previousColor = RenderSystem.outputColorTextureOverride;
-            GpuTextureView previousDepth = RenderSystem.outputDepthTextureOverride;
-            RenderSystem.outputColorTextureOverride = colorView;
-            RenderSystem.outputDepthTextureOverride = depthView;
             try {
-                ShowoffDraw.draw(request.scene(), request.view(), width, height, buffers, PROJECTION, projectionBuffer());
+                ShowoffOffscreen.render("Showoff capture", colorView, depthView,
+                        collector -> ShowoffDraw.draw(request.scene(), request.view(), width, height, collector, PROJECTION, projectionBuffer()));
             } finally {
-                try {
-                    buffers.endBatch();
-                } finally {
-                    RenderSystem.outputColorTextureOverride = previousColor;
-                    RenderSystem.outputDepthTextureOverride = previousDepth;
-                    RenderSystem.restoreProjectionMatrix();
-                }
+                RenderSystem.restoreProjectionMatrix();
             }
         } catch (RuntimeException e) {
             resources.closeAfterFailure(e);
@@ -195,12 +184,12 @@ final class ShowoffCapture {
         GpuBuffer readback;
         try {
             readback = device.createBuffer(() -> "Showoff capture readback", GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST,
-                    (long) width * height * color.getFormat().pixelSize());
+                    (long) width * height * color.getFormat().blockSize());
             resources.readback(readback);
             encoder.copyTextureToBuffer(color, readback, 0L, () -> {
                 NativeImage image = null;
                 try (resources) {
-                    try (GpuBuffer.MappedView mapped = encoder.mapBuffer(readback, true, false)) {
+                    try (GpuBufferSlice.MappedView mapped = readback.map(true, false)) {
                         image = toImage(mapped.data(), width, height, request.background());
                     }
                 } catch (RuntimeException e) {
@@ -323,7 +312,7 @@ final class ShowoffCapture {
     }
 
     static void chat(Component message) {
-        Minecraft.getInstance().gui.getChat().addClientSystemMessage(message);
+        Minecraft.getInstance().gui.hud.getChat().addClientSystemMessage(message);
     }
 
     private static Path unique(Path directory, String base) {

@@ -11,7 +11,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeSource;
-import net.minecraft.world.level.biome.Climate;
+import net.minecraft.world.level.biome.BiomeResolver;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -28,7 +28,7 @@ public final class BiomeSampler {
     private final int interval;
     private final int y;
     private final BiomeSource source;
-    private final Climate.Sampler sampler;
+    private final BiomeResolver resolver;
     private final Object2IntOpenHashMap<Identifier> counts = new Object2IntOpenHashMap<>();
     private final Map<Identifier, BlockPos> nearest = new HashMap<>();
     private int samples;
@@ -39,7 +39,7 @@ public final class BiomeSampler {
         this.interval = interval;
         this.y = y;
         this.source = level.getChunkSource().getGenerator().getBiomeSource();
-        this.sampler = level.getChunkSource().randomState().sampler();
+        this.resolver = source.createUncachedResolver(level.getChunkSource().randomState());
     }
 
     public int pointsPerAxis() {
@@ -68,7 +68,7 @@ public final class BiomeSampler {
 
     public void sampleRow(int z) {
         for (int x = center.getX() - radius; x <= center.getX() + radius; x += interval) {
-            Holder<Biome> biome = source.getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(y), QuartPos.fromBlock(z), sampler);
+            Holder<Biome> biome = resolver.getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(y), QuartPos.fromBlock(z));
             Identifier id = biome.unwrapKey().map(ResourceKey::identifier).orElse(Identifier.withDefaultNamespace("unknown"));
             counts.addTo(id, 1);
             samples++;

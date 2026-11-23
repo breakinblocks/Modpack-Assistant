@@ -17,6 +17,6 @@ public final class DataGen {
         DataGenerator generator = event.getGenerator();
         PackOutput output = generator.getPackOutput();
         generator.addProvider(true, new LangProvider(output));
-        generator.addProvider(true, new EntityTagProvider(output, event.getLookupProvider()));
+        generator.addProvider(true, new EntityTagProvider(output, event.getWorldLookupProvider()));
     }
 }

@@ -52,7 +52,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Predicate;
+import java.util.function.Predicate;
+import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.util.valueproviders.ConstantInt;
+import net.minecraft.util.valueproviders.UniformInt;
 
 public final class RegressionGameTests {
 
@@ -270,7 +273,7 @@ public final class RegressionGameTests {
         var level = helper.getLevel();
         var unsafe = ResourceKey.create(Registries.LOOT_TABLE, Identifier.withDefaultNamespace("chests/shipwreck_map"));
         for (LootTable table : List.of(level.getServer().reloadableRegistries().getLootTable(unsafe),
-                LootTable.lootTable().withPool(LootPool.lootPool().add(NestedLootTable.lootTableReference(unsafe))).build())) {
+                LootTable.lootTable().withPool(LootPool.lootPool().add(NestedLootTable.lootTableReference(level.getServer().reloadableRegistries().lookup().lookupOrThrow(Registries.LOOT_TABLE).getOrThrow(unsafe)))).build())) {
             LootSafety safety = new LootSafety(level, ResourceKey.create(Registries.LOOT_TABLE, ModpackAssistant.id("safety_probe")), table, 0);
             boolean rejected = false;
             try {
@@ -289,8 +292,8 @@ public final class RegressionGameTests {
 
     public static void spawnPacksUseDeclaredRange(GameTestHelper helper) {
         RandomSource random = RandomSource.create(123);
-        var singleton = new MobSpawnSettings.SpawnerData(EntityType.ZOMBIE, 1, 1);
-        var large = new MobSpawnSettings.SpawnerData(EntityType.ZOMBIE, 6, 9);
+        var singleton = new MobSpawnSettings.SpawnerData(EntityTypes.ZOMBIE, ConstantInt.of(1));
+        var large = new MobSpawnSettings.SpawnerData(EntityTypes.ZOMBIE, UniformInt.of(6, 9));
         var seen = new HashSet<Integer>();
         for (int i = 0; i < 1000; i++) {
             helper.assertTrue(SpawnSimulator.groupSize(singleton, random) == 1, "singleton pack must remain one");
@@ -386,7 +389,7 @@ public final class RegressionGameTests {
         helper.assertFalse(RunScheduler.isBusy(), "scheduler should be idle");
         List<Creeper> entities = new ArrayList<>();
         for (int i = 0; i < 260; i++) {
-            Creeper entity = helper.spawn(EntityType.CREEPER, new BlockPos(4, 1, 4));
+            Creeper entity = helper.spawn(EntityTypes.CREEPER, new BlockPos(4, 1, 4));
             entity.setNoAi(true);
             entities.add(entity);
         }

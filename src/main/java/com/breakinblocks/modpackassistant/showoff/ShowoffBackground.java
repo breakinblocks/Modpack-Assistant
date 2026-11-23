@@ -1,23 +1,19 @@
 package com.breakinblocks.modpackassistant.showoff;
 
-import net.minecraft.ChatFormatting;
+import net.minecraft.world.scores.TeamColor;
 
-import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 
 public final class ShowoffBackground {
     public static final int TRANSPARENT = 0;
     public static final int DEFAULT = 0xFF000000;
-    public static final List<ChatFormatting> SWATCHES = Arrays.stream(ChatFormatting.values())
-            .filter(ChatFormatting::isColor)
-            .toList();
+    public static final List<TeamColor> SWATCHES = TeamColor.VALUES;
 
     private ShowoffBackground() {
     }
 
-    public static int of(ChatFormatting color) {
-        return opaque(Objects.requireNonNull(color.getColor()));
+    public static int of(TeamColor color) {
+        return opaque(color.rgb());
     }
 
     public static int opaque(int rgb) {
@@ -32,9 +28,9 @@ public final class ShowoffBackground {
         if (isTransparent(argb)) {
             return "transparent";
         }
-        for (ChatFormatting swatch : SWATCHES) {
+        for (TeamColor swatch : SWATCHES) {
             if (of(swatch) == argb) {
-                return swatch.getName();
+                return swatch.getSerializedName();
             }
         }
         return String.format("#%06X", argb & 0xFFFFFF);

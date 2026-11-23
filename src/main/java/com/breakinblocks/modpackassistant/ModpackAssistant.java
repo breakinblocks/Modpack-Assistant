@@ -25,7 +25,7 @@ public class ModpackAssistant {
     public ModpackAssistant(IEventBus eventBus, ModContainer container, Dist dist) {
         ChunkAccessor.TICKET_TYPES.register(eventBus);
         MAGameTests.TEST_INSTANCE_TYPES.register(eventBus);
-        container.registerConfig(ModConfig.Type.COMMON, MAConfig.SPEC);
+        container.registerConfig(ModConfig.Type.LOCAL, MAConfig.SPEC);
         if (dist.isClient()) {
             container.registerConfig(ModConfig.Type.CLIENT, MAClientConfig.SPEC);
         }

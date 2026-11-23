@@ -5,7 +5,7 @@ import com.mojang.authlib.GameProfile;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.ClientMannequin;
-import net.minecraft.client.renderer.SubmitNodeStorage;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -30,7 +30,8 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
+import java.util.concurrent.CompletionException;
+import net.minecraft.world.entity.EntityTypes;
 
 final class PlayerShowoff {
     static final int PARTS = 6;
@@ -51,7 +52,7 @@ final class PlayerShowoff {
         if (minecraft.level == null) {
             throw new IllegalStateException("Cannot create a player showoff without a client level");
         }
-        Mannequin created = EntityType.MANNEQUIN.create(minecraft.level, EntitySpawnReason.COMMAND);
+        Mannequin created = EntityTypes.MANNEQUIN.create(minecraft.level, EntitySpawnReason.COMMAND);
         if (!(created instanceof ClientMannequin clientMannequin)) {
             throw new IllegalStateException("Minecraft did not create a client mannequin");
         }
@@ -72,7 +73,7 @@ final class PlayerShowoff {
                     .result().orElseThrow(() -> new IllegalArgumentException("Invalid mannequin equipment NBT"));
         }
         net.minecraft.world.entity.Entity loaded = EntityType.loadEntityRecursive(
-                EntityType.MANNEQUIN, loadTag, level, EntitySpawnReason.COMMAND, entity -> entity);
+                EntityTypes.MANNEQUIN, loadTag, level, EntitySpawnReason.COMMAND, entity -> entity);
         if (!(loaded instanceof ClientMannequin clientMannequin)) {
             throw new IllegalArgumentException("Showoff entity NBT did not produce a client mannequin");
         }
@@ -215,7 +216,7 @@ final class PlayerShowoff {
         }, minecraft);
     }
 
-    void render(PoseStack poseStack, SubmitNodeStorage storage, CameraRenderState camera) {
+    void render(PoseStack poseStack, SubmitNodeCollector storage, CameraRenderState camera) {
         ensureOpen();
         if (skinFromMannequin) {
             selectedSkin = mannequin.getSkin();

@@ -52,7 +52,8 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Optional;
+import net.minecraft.world.entity.EntitySpawnRequest;
 
 final class SceneBuilder {
     private static final double MIN_ENTITY_SIZE = 0.5;
@@ -302,7 +303,7 @@ final class SceneBuilder {
         tag.put("Pos", posTag);
         tag.remove("UUID");
         try {
-            EntityType.create(TagValueInput.create(ProblemReporter.DISCARDING, level.registryAccess(), tag), level, EntitySpawnReason.STRUCTURE)
+            EntityType.create(TagValueInput.create(ProblemReporter.DISCARDING, level.registryAccess(), tag), level, new EntitySpawnRequest(EntitySpawnReason.STRUCTURE, false))
                     .ifPresentOrElse(entity -> {
                         entity.snapTo(pos.x, pos.y, pos.z, entity.getYRot(), entity.getXRot());
                         entity.setYBodyRot(entity.getYRot());

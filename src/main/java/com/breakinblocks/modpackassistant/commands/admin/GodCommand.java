@@ -22,8 +22,8 @@ public final class GodCommand {
     }
 
     private static int toggle(CommandSourceStack source, ServerPlayer target) {
-        boolean enabled = !target.isInvulnerable();
-        target.setInvulnerable(enabled);
+        boolean enabled = !target.isPermanentlyInvulnerable();
+        target.setPermanentlyInvulnerable(enabled);
         if (source.getEntity() != target) {
             target.sendSystemMessage((enabled ? Messages.GOD_TARGET_ON : Messages.GOD_TARGET_OFF).get(source.getDisplayName()));
         }

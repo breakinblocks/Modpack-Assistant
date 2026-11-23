@@ -1,5 +1,34 @@
 # Changelog
 
+## 26.3-1.0.9
+
+First release for Minecraft 26.3 and NeoForge 26.3.0.115
+
+### Added
+
+- `/mpa chunkthroughput <radius> [x] [z]` generates every chunk within a circle of that many chunks
+  around the given block position (or the player, or world spawn) and reports how many chunks per
+  second the server generated, overall and per worker thread. Chunks that were already loaded are
+  counted separately. The run shows progress and can be stopped with `/mpa cancel`. Radius goes up
+  to 5000 chunks. Contributed by @Asbestosstar in breakinblocks/Modpack-Assistant#5.
+- `/mpa showBarriers on` draws every barrier block as a see-through red cube with the barrier
+  sign, with no faces between neighbouring barriers, so walls and floors read as one surface.
+  `/mpa showBarriers off` hides them again. The setting is saved in the client config, starts off,
+  and needs the mod on the client. Based on Show Barriers by Rylex
+  (LegendaryRylex/showbarriers, MIT).
+
+### Changed
+
+- `/mpa simulateSpawns` reads the spawn list from the dimension's natural mob spawns with the
+  biome's applied on top, since 26.3 moved spawn settings off the biome. Timeline changes to spawns
+  are not included, and the report header says so.
+- The loot safety check behind `/mpa simulateLoot` and `/mpa testStructureLoot` follows the 26.3
+  loot format, where modifiers, conditions and nested tables can be plain references. Tag
+  references to modifiers, conditions or tables are refused.
+- The config file is now `config/modpackassistant-local.toml`, since 26.3 replaced common configs
+  with local ones. Settings in an old `modpackassistant-common.toml` are not carried over; copy
+  them across by hand.
+
 ## 26.1.2-1.0.9
 
 ### Added

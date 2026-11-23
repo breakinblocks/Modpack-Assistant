@@ -106,7 +106,7 @@ public final class ShowoffClient {
             scene.player().lookup(playerInput);
         }
         session = opened;
-        minecraft.setScreen(new ShowoffScreen(opened));
+        minecraft.gui.setScreen(new ShowoffScreen(opened));
     }
 
     /**
@@ -146,7 +146,7 @@ public final class ShowoffClient {
                     if (level == null) {
                         throw new IllegalStateException("Cannot capture a showoff view without a client level");
                     }
-                    int maximum = RenderSystem.getDevice().getMaxTextureSize();
+                    int maximum = RenderSystem.getDevice().getDeviceInfo().limits().maxTextureSize();
                     if (width > maximum || height > maximum) {
                         throw new IllegalArgumentException("Capture dimensions exceed GPU limit " + maximum);
                     }
@@ -223,8 +223,8 @@ public final class ShowoffClient {
 
     public static void close() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.screen instanceof ShowoffScreen) {
-            minecraft.setScreen(null);
+        if (minecraft.gui.screen() instanceof ShowoffScreen) {
+            minecraft.gui.setScreen(null);
         }
         session = null;
     }

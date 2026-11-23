@@ -19,7 +19,8 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.Enchantments;
 
-import java.util.List;
+import java.util.List;
+import net.minecraft.util.Prediction;
 
 public final class OpswordCommand {
     public static final int LEVEL = 255;
@@ -53,7 +54,7 @@ public final class OpswordCommand {
         });
 
         if (!player.getInventory().add(sword)) {
-            ItemEntity drop = player.drop(sword, false);
+            ItemEntity drop = player.drop(sword, false, Prediction.SERVER_ONLY);
             if (drop != null) {
                 drop.setNoPickUpDelay();
                 drop.setTarget(player.getUUID());
