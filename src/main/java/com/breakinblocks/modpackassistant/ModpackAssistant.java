@@ -1,5 +1,6 @@
 package com.breakinblocks.modpackassistant;
 
+import com.breakinblocks.modpackassistant.config.MAClientConfig;
 import com.breakinblocks.modpackassistant.config.MAConfig;
 import com.mojang.logging.LogUtils;
 import net.minecraft.resources.ResourceLocation;
@@ -21,5 +22,8 @@ public class ModpackAssistant {
 
     public ModpackAssistant(IEventBus eventBus, ModContainer container, Dist dist) {
         container.registerConfig(ModConfig.Type.COMMON, MAConfig.SPEC);
+        if (dist.isClient()) {
+            container.registerConfig(ModConfig.Type.CLIENT, MAClientConfig.SPEC);
+        }
     }
 }

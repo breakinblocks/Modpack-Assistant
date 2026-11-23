@@ -82,6 +82,9 @@ public final class Messages {
     public static final Msg GOD_TARGET_OFF = msg("god.target_off", "%s disabled god mode for you");
     public static final Msg NIGHTVISION_ON = msg("nightvision.on", "Night vision enabled");
     public static final Msg NIGHTVISION_OFF = msg("nightvision.off", "Night vision disabled");
+    public static final Msg SHOWBARRIERS_ON = msg("showbarriers.on", "Barrier blocks are now shown");
+    public static final Msg SHOWBARRIERS_OFF = msg("showbarriers.off", "Barrier blocks are now hidden");
+    public static final Msg SHOWBARRIERS_NO_CLIENT = msg("showbarriers.no_client", "%s does not have Modpack Assistant on their client, which showing barriers needs");
     public static final Msg REPAIR_DONE = msg("repair.done", "%s has been repaired");
     public static final Msg REPAIR_TARGET = msg("repair.target", "%s repaired your %s");
     public static final Msg REPAIR_NOT_DAMAGEABLE = msg("repair.not_damageable", "%s cannot be damaged, so there is nothing to repair");

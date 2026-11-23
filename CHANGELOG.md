@@ -9,6 +9,11 @@
   second the server generated, overall and per worker thread. Chunks that were already loaded are
   counted separately. The run shows progress and can be stopped with `/mpa cancel`. Radius goes up
   to 5000 chunks. Contributed by @Asbestosstar in breakinblocks/Modpack-Assistant#5.
+- `/mpa showBarriers on` draws every barrier block as a see-through red cube with the barrier
+  sign, with no faces between neighbouring barriers, so walls and floors read as one surface.
+  `/mpa showBarriers off` hides them again. The setting is saved in the client config, starts off,
+  and needs the mod on the client. Based on Show Barriers by Rylex
+  (LegendaryRylex/showbarriers, MIT).
 
 ## 1.21.1-1.0.8
 
