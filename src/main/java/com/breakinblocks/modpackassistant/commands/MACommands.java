@@ -24,6 +24,7 @@ import com.breakinblocks.modpackassistant.commands.analysis.SimulateLootCommand;
 import com.breakinblocks.modpackassistant.commands.analysis.SimulateSpawnsCommand;
 import com.breakinblocks.modpackassistant.commands.showoff.ShowoffCommand;
 import com.breakinblocks.modpackassistant.commands.world.CancelCommand;
+import com.breakinblocks.modpackassistant.commands.world.ChunkThroughputCommand;
 import com.breakinblocks.modpackassistant.commands.world.ClearCommand;
 import com.breakinblocks.modpackassistant.commands.world.DrainCommand;
 import com.breakinblocks.modpackassistant.commands.world.KillCommand;
@@ -79,7 +80,8 @@ public final class MACommands {
             context -> AuditUnificationCommand.build(),
             context -> ExportTagsCommand.build(),
             context -> MapBiomesCommand.build(),
-            context -> CancelCommand.build()
+            context -> CancelCommand.build(),
+            context -> ChunkThroughputCommand.build()
     );
 
     private MACommands() {

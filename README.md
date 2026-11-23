@@ -99,6 +99,7 @@ World editing:
 | `/mpa testStructureLoot <structure> [samples]`, `... clear` | Chests of generated loot per structure loot table, with signs |
 | `/mpa structureGrab <from> <to> [name] [both/nbt/snbt]` | Save a region of the world as a structure file |
 | `/mpa structureGrab pos1 [pos]`, `pos2 [pos]`, `grab [name] [format]`, `clear` | Set the corners one at a time, then grab them |
+| `/mpa chunkthroughput <radius> [x] [z]` | Generate every chunk within a circular radius and report chunks per second |
 | `/mpa cancel` | Abort the active long-running operation |
 
 Analysis and reports, all read-only, each writing a file under `logs/modpackassistant/`:

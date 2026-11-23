@@ -1,5 +1,15 @@
 # Changelog
 
+## 26.1.2-1.0.9
+
+### Added
+
+- `/mpa chunkthroughput <radius> [x] [z]` generates every chunk within a circle of that many chunks
+  around the given block position (or the player, or world spawn) and reports how many chunks per
+  second the server generated, overall and per worker thread. Chunks that were already loaded are
+  counted separately. The run shows progress and can be stopped with `/mpa cancel`. Radius goes up
+  to 5000 chunks. Contributed by @Asbestosstar in breakinblocks/Modpack-Assistant#5.
+
 ## 26.1.2-1.0.8
 
 ### Added
